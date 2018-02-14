@@ -92,9 +92,9 @@ import numpy as np
 
 class NiftiDataset:
   def __init__(self,
-    data_dir,
-    input_batch_shape,
-    output_batch_shape,
+    data_dir = '',
+    input_batch_shape = (),
+    output_batch_shape = (),
     image_filename = '',
     label_filename = '',
     resample=False, 
@@ -136,18 +136,19 @@ class NiftiDataset:
     reader.SetFileName(path)
     return reader.Execute()
 
-  def normalization(self,image):
+  def normalize_image(self,image):
     normalizeFilter = sitk.NoralizeImageFilter()
     image = normalizeFilter.Execute(image)
+    return image
 
   def input_parser(self,image_path, label_path):
-    print(image_path,label_path)
-
-    # # read image and label
-    # image = read_image(image_path.decode("utf-8"))
-    # label = read_image(label_path.decode("utf-8"))
+    # read image and label
+    image = self.read_image(image_path.decode("utf-8"))
+    label = self.read_image(label_path.decode("utf-8"))
 
     # image normalization
+    if self.normalization:
+      image = self.normalize_image(image)
 
     return image_path, label_path
 

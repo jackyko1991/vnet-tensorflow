@@ -82,11 +82,12 @@ def train():
         with tf.device('/cpu:0'):
             # create a nifti dataset class to import medical image data by simpleitk
             niftiDataset = NiftiDataset(
-                train_data_dir,
-                input_batch_shape,
-                output_batch_shape,
+                data_dir=train_data_dir,
+                input_batch_shape=input_batch_shape,
+                input_batch_shape=output_batch_shape,
                 image_filename=image_filename,
-                label_filename=image_filename)
+                label_filename=image_filename,
+                normalization=True)
 
             dataset = niftiDataset.get_dataset()
             # dataset = NDI.inputs(train_data_dir,input_batch_shape,output_batch_shape)
