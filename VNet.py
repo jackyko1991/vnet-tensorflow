@@ -1,7 +1,6 @@
 import tensorflow as tf
 from Layers import convolution_3d, deconvolution_3d, prelu
 
-
 def convolution_block(layer_input, n_channels, num_convolutions):
     x = layer_input
     for i in range(num_convolutions - 1):
