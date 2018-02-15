@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-from NiftiDataset import NiftiDataset
+import NiftiDataset
 import os
 import VNet
 import math
@@ -80,16 +80,29 @@ def train():
 
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):
-            # create a nifti dataset class to import medical image data by simpleitk
-            niftiDataset = NiftiDataset(
-                data_dir=train_data_dir,
-                input_batch_shape=input_batch_shape,
-                input_batch_shape=output_batch_shape,
-                image_filename=image_filename,
-                label_filename=image_filename,
-                normalization=True)
+            # create transformations to image and labels
+            normalize = NiftiDataset.Normalization()
 
-            dataset = niftiDataset.get_dataset()
+            tranforms = [normalize]
+
+            # create a nifti dataset class to import medical image data by simpleitk
+            # niftiDataset = NiftiDataset(
+            #     data_dir=train_data_dir,
+            #     input_batch_shape=input_batch_shape,
+            #     input_batch_shape=output_batch_shape,
+            #     image_filename=image_filename,
+            #     label_filename=image_filename,
+            #     normalization=True)
+
+            trainDataset = NiftiDataset.NiftiDataset(
+                data_dir=train_data_dir,
+                image_filename=image_filename,
+                label_filename=label_filename,
+                transforms=tranforms,
+                train=True
+                )
+
+            dataset = trainDataset.get_dataset()
             # dataset = NDI.inputs(train_data_dir,input_batch_shape,output_batch_shape)
 
         iterator = dataset.make_initializable_iterator()

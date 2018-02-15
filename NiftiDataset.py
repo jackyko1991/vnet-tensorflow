@@ -90,28 +90,38 @@ import numpy as np
 
 #     # Read images
 
-class NiftiDataset:
+class Normalization(object):
+  """Normalize an image by setting its mean to zero and variance to one"""
+
+  def __init__(self):
+    self.name = 'Normalization'
+
+  def __call__(self, sample):
+    print("Image normalization...")
+    normalizeFilter = sitk.NormalizeImageFilter()
+    image, label = sample['image'], sample['label']
+    image = normalizeFilter.Execute(image)
+
+    return {'image':image, 'label':label}
+
+class NiftiDataset(object):
+  """
+  load image-label pair for training, testing and inference
+  """
+
   def __init__(self,
     data_dir = '',
-    input_batch_shape = (),
-    output_batch_shape = (),
     image_filename = '',
     label_filename = '',
-    resample=False, 
-    normalization=True,
-    padding=True,
-    randomNoise=False):
+    transforms=None,
+    train=False):
 
     # Init membership variables
     self.data_dir = data_dir
-    self.input_batch_shape = input_batch_shape
-    self.output_batch_shape = output_batch_shape
     self.image_filename = image_filename
     self.label_filename = label_filename
-    self.resample = resample
-    self.normalization = normalization
-    self.padding = padding
-    self.randomNoise = randomNoise
+    self.transforms = transforms
+    self.train = train
 
   def get_dataset(self):
     image_paths = []
@@ -126,9 +136,6 @@ class NiftiDataset:
       self.input_parser, [image_path, label_path], [tf.string,tf.string])))
 
     self.dataset = dataset
-
-    # print(self.image_filename)
-    # exit()
     return self.dataset
 
   def read_image(self,path):
@@ -136,21 +143,54 @@ class NiftiDataset:
     reader.SetFileName(path)
     return reader.Execute()
 
-  def normalize_image(self,image):
-    normalizeFilter = sitk.NoralizeImageFilter()
-    image = normalizeFilter.Execute(image)
-    return image
-
   def input_parser(self,image_path, label_path):
     # read image and label
     image = self.read_image(image_path.decode("utf-8"))
     label = self.read_image(label_path.decode("utf-8"))
 
-    # image normalization
-    if self.normalization:
-      image = self.normalize_image(image)
+    sample = {'image':image, 'label':label}
+
+    if self.transforms:
+      for transform in self.transforms:
+        print(transform.name)
+        sample = transform(sample)
 
     return image_path, label_path
+
+
+# class NiftiDataset:
+#   def __init__(self,
+#     data_dir = '',
+#     input_batch_shape = (),
+#     output_batch_shape = (),
+#     image_filename = '',
+#     label_filename = '',
+#     resample=False, 
+#     normalization=True,
+#     padding=True,
+#     randomNoise=False):
+
+#     # Init membership variables
+#     self.data_dir = data_dir
+#     self.input_batch_shape = input_batch_shape
+#     self.output_batch_shape = output_batch_shape
+#     self.image_filename = image_filename
+#     self.label_filename = label_filename
+#     self.resample = resample
+#     self.normalization = normalization
+#     self.padding = padding
+#     self.randomNoise = randomNoise
+
+
+
+
+
+#   def normalize_image(self,image):
+#     normalizeFilter = sitk.NoralizeImageFilter()
+#     image = normalizeFilter.Execute(image)
+#     return image
+
+
 
   # def inputs(data_dir,input_batch_shape,output_batch_shape):
   #   """Construct input for vnet training using the Reader ops.
