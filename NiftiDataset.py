@@ -2,111 +2,19 @@ import SimpleITK as sitk
 import tensorflow as tf
 import os
 import numpy as np
-
-# class BatchGenerator:
-#   def __init__(self,data_dir,
-#     input_batch_shape,
-#     output_batch_shape,
-#     image_filename = '',
-#     label_filename = '',
-#     resample=False, 
-#     normalization=True,
-#     padding=True,
-#     randomNoise=False,
-#     shuffle=False):
-
-#     # Init membership variables
-#     self.data_dir = data_dir
-#     self.input_batch_shape = input_batch_shape
-#     self.output_batch_shape = output_batch_shape
-#     self.image_filename = image_filename
-#     self.label_filename = label_filename
-#     self.resample = resample
-#     self.normalization = normalization
-#     self.padding = padding
-#     self.randomNoise = randomNoise
-#     self.shuffle = shuffle
-
-#     self.pointer = 0
-
-#     # first 4 dimension of input/output batches should have same size
-#     if self.input_batch_shape[0:3] != self.output_batch_shape[0:3]:
-#       raise ValueError("input output batch dimension does not match")
-
-#     self.scan_data_dir(self.data_dir)
-
-#     if self.shuffle:
-#       self.shuffle_data()
-
-#   def scan_data_dir(self,data_dir):
-#     """
-#     Scan the image and label files to get paths
-#     """
-#     self.image_paths = []
-#     self.label_paths = []
-#     for case in os.listdir(data_dir):
-#       image_path = os.path.join(data_dir,case,'img.nii.gz')
-#       label_path = os.path.join(data_dir,case,'label.nii.gz')
-#       # check existence
-#       if (os.path.exists(image_path) and os.path.exists(label_path)):
-#         self.image_paths.append(image_path)
-#         self.label_paths.append(label_path)
-#       else:
-#         print('image/label in ' + case + ' not exist, ignored.')
-    
-#     # store total number of data
-#     self.data_size = len(self.image_paths)
-
-#   def shuffle_data(self):
-#     """
-#     Random shuffle the images and labels
-#     """
-
-#     image_paths = self.image_paths.copy()
-#     label_paths = self.label_paths.copy()
-
-#     self.image_paths = []
-#     self.label_paths = []
-
-#     # create the list of permuted index and shuffle data according to list
-#     idx = np.random.permutation(len(image_paths))
-
-#     for i in idx:
-#       self.image_paths.append(image_paths[i])
-#       self.label_paths.append(label_paths[i])
-    
-#   def next_batch(self):
-#     """
-#       This function gets the next n ( = batch_size) images and labels from the path list
-#       and loads them into memory 
-#     """
-    
-#     # Get next batch of image and label paths
-#     image_paths = self.image_paths[self.pointer:self.pointer+self.input_batch_shape[0]]
-#     label_paths = self.label_paths[self.pointer:self.pointer+self.input_batch_shape[0]]
-
-#     # update pointer
-#     self.pointer += self.input_batch_shape[0]
-
-#     # Read images
-
-class Normalization(object):
-  """Normalize an image by setting its mean to zero and variance to one"""
-
-  def __init__(self):
-    self.name = 'Normalization'
-
-  def __call__(self, sample):
-    print("Image normalization...")
-    normalizeFilter = sitk.NormalizeImageFilter()
-    image, label = sample['image'], sample['label']
-    image = normalizeFilter.Execute(image)
-
-    return {'image':image, 'label':label}
+import math
+import random
 
 class NiftiDataset(object):
   """
-  load image-label pair for training, testing and inference
+  load image-label pair for training, testing and inference.
+  Currently only support linear interpolation method
+  Args:
+		data_dir (string): Path to data directory.
+    image_filename (string): Filename of image data.
+    label_filename (string): Filename of label data.
+    transforms (list): List of SimpleITK image transformations.
+    train (bool): Determine whether the dataset class run in training/inference mode. When set to false, an empty label with same metadata as image is generated.
   """
 
   def __init__(self,
@@ -133,7 +41,7 @@ class NiftiDataset(object):
     dataset = tf.data.Dataset.from_tensor_slices((image_paths,label_paths))
 
     dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
-      self.input_parser, [image_path, label_path], [tf.string,tf.string])))
+      self.input_parser, [image_path, label_path], [tf.float32,tf.int32])))
 
     self.dataset = dataset
     return self.dataset
@@ -152,77 +60,224 @@ class NiftiDataset(object):
 
     if self.transforms:
       for transform in self.transforms:
-        print(transform.name)
+        # print(transform.name)
         sample = transform(sample)
 
-    return image_path, label_path
+    # convert sample to tf tensors
+    image_np = sitk.GetArrayFromImage(sample['image'])
+    label_np = sitk.GetArrayFromImage(sample['label'])
 
+    image_np = np.asarray(image_np,np.float32)
+    label_np = np.asarray(label_np,np.int32)
 
-# class NiftiDataset:
-#   def __init__(self,
-#     data_dir = '',
-#     input_batch_shape = (),
-#     output_batch_shape = (),
-#     image_filename = '',
-#     label_filename = '',
-#     resample=False, 
-#     normalization=True,
-#     padding=True,
-#     randomNoise=False):
+    return [image_np, label_np]
 
-#     # Init membership variables
-#     self.data_dir = data_dir
-#     self.input_batch_shape = input_batch_shape
-#     self.output_batch_shape = output_batch_shape
-#     self.image_filename = image_filename
-#     self.label_filename = label_filename
-#     self.resample = resample
-#     self.normalization = normalization
-#     self.padding = padding
-#     self.randomNoise = randomNoise
+class Normalization(object):
+  """
+  Normalize an image by setting its mean to zero and variance to one
+  """
 
+  def __init__(self):
+    self.name = 'Normalization'
 
+  def __call__(self, sample):
+    normalizeFilter = sitk.NormalizeImageFilter()
+    image, label = sample['image'], sample['label']
+    image = normalizeFilter.Execute(image)
 
+    return {'image':image, 'label':label}
 
+class Resample(object):
+  """
+  Resample the volume in a sample to a given voxel size
 
-#   def normalize_image(self,image):
-#     normalizeFilter = sitk.NoralizeImageFilter()
-#     image = normalizeFilter.Execute(image)
-#     return image
+	Args:
+		voxel_size (float or tuple): Desired output size.
+		If float, output volume is isotropic.
+		If tuple, output voxel size is matched with voxel size
+		Currently only support linear interpolation method
+  """
 
+  def __init__(self, voxel_size):
+    self.name = 'Resample'
 
+    assert isinstance(voxel_size, (float, tuple))
+    if isinstance(voxel_size, float):
+      self.voxel_size = (voxel_size, voxel_size, voxel_size)
+    else:
+      assert len(voxel_size) == 3
+      self.voxel_size = voxel_size
 
-  # def inputs(data_dir,input_batch_shape,output_batch_shape):
-  #   """Construct input for vnet training using the Reader ops.
-  #   Args:
-  #     data_dir: Path to the data directory.
-  #     batch_shape: Shape of the batch.
-  #   Returns:
-  #     images: Images. 5D tensor of [batch_size, height, width, depth, input_channel] size.
-  #     labels: Labels. 5D tensor of [batch_size, height, width, depth, output_channel] size.
-  #   """
-
-  #   image_paths = []
-  #   label_paths = []
-  #   for case in os.listdir(data_dir):
-  #     image_paths.append(os.path.join(data_dir,case,'img.nii.gz'))
-  #     label_paths.append(os.path.join(data_dir,case,'label.nii.gz'))
-
-  #   dataset = tf.data.Dataset.from_tensor_slices((image_paths,label_paths))
-
-  #   dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
-  #     _input_parser, [image_path, label_path], [tf.float32,tf.int32])))
+  def __call__(self, sample):
+    image, label = sample['image'], sample['label']
     
-  #   return dataset
+    old_spacing = image.GetSpacing()
+    old_size = image.GetSize()
+    
+    new_spacing = self.voxel_size
 
-# def augumented_inputs(data_dir,input_batch_shape,output_batch_shape):
-#   """Construct augumented input for vnet training using the Reader ops.
-#   Args:
-#     data_dir: Path to the data directory.
-#     batch_shape: Shape of the batch.
-#   Returns:
-#     images: Images. 5D tensor of [batch_size, height, width, depth, input_channel] size.
-#     labels: Labels. 5D tensor of [batch_size, height, width, depth, output_channel] size.
-#   """
-#   inputs(data_dir,input_batch_shape, output_batch_shape)
-  
+    new_size = []
+    for i in range(3):
+      new_size.append(int(math.ceil(old_spacing[i]*old_size[i]/new_spacing[i])))
+    new_size = tuple(new_size)
+
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetInterpolator(2)
+    resampler.SetOutputSpacing(new_spacing)
+    resampler.SetSize(new_size)
+
+    # resample on image
+    resampler.SetOutputOrigin(image.GetOrigin())
+    resampler.SetOutputDirection(image.GetDirection())
+    # print("Resampling image...")
+    image = resampler.Execute(image)
+
+    # resample on segmentation
+    resampler.SetOutputOrigin(label.GetOrigin())
+    resampler.SetOutputDirection(label.GetDirection())
+    # print("Resampling segmentation...")
+    label = resampler.Execute(label)
+
+    return {'image': image, 'label': label}
+
+class Padding(object):
+  """
+  Add padding to the image if size is smaller than patch size
+
+	Args:
+		output_size (tuple or int): Desired output size. If int, a cubic volume is formed
+	"""
+
+  def __init__(self, output_size):
+    self.name = 'Padding'
+
+    assert isinstance(output_size, (int, tuple))
+    if isinstance(output_size, int):
+      self.output_size = (output_size, output_size, output_size)
+    else:
+      assert len(output_size) == 3
+      self.output_size = output_size
+
+    assert all(i > 0 for i in list(self.output_size))
+
+  def __call__(self,sample):
+    image, label = sample['image'], sample['label']
+    size_old = image.GetSize()
+
+    if (size_old[0] >= self.output_size[0]) and (size_old[1] >= self.output_size[1]) and (size_old[2] >= self.output_size[2]):
+      return sample
+    else:
+      resampler = sitk.ResampleImageFilter()
+      resampler.SetInterpolator(2)
+      resampler.SetOutputSpacing(image.GetSpacing())
+      resampler.SetSize(self.output_size)
+
+      # resample on image
+      resampler.SetOutputOrigin(image.GetOrigin())
+      resampler.SetOutputDirection(image.GetDirection())
+      image = resampler.Execute(image)
+
+      # resample on label
+      resampler.SetOutputOrigin(label.GetOrigin())
+      resampler.SetOutputDirection(label.GetDirection())
+      label = resampler.Execute(label)
+
+      return {'image': image, 'label': label}
+
+class RandomCrop(object):
+  """
+  Crop randomly the image in a sample. This is usually used for data augmentation.
+	Drop ratio is implemented for randomly dropout crops with empty label. (Default to be 0.2)
+	This transformation only applicable in train mode
+
+  Args:
+    output_size (tuple or int): Desired output size. If int, cubic crop is made.
+  """
+
+  def __init__(self, output_size, drop_ratio=0.1, min_pixel=1):
+    self.name = 'Random Crop'
+
+    assert isinstance(output_size, (int, tuple))
+    if isinstance(output_size, int):
+      self.output_size = (output_size, output_size, output_size)
+    else:
+      assert len(output_size) == 3
+      self.output_size = output_size
+
+    assert isinstance(drop_ratio, float)
+    if drop_ratio >=0 and drop_ratio<=1:
+      self.drop_ratio = drop_ratio
+    else:
+      raise RuntimeError('Drop ratio should be between 0 and 1')
+
+    assert isinstance(min_pixel, int)
+    if min_pixel >=0 :
+      self.min_pixel = min_pixel
+    else:
+      raise RuntimeError('Min label pixel count should be integer larger than 0')
+
+  def __call__(self,sample):
+    image, label = sample['image'], sample['label']
+    size_old = image.GetSize()
+    size_new = self.output_size
+
+    contain_label = False
+
+    roiFilter = sitk.RegionOfInterestImageFilter()
+    roiFilter.SetSize([size_new[0],size_new[1],size_new[2]])
+
+    while not contain_label: 
+      # get the start crop coordinate in ijk
+      if size_old[0] <= size_new[0]:
+        start_i = 0
+      else:
+        start_i = np.random.randint(0, size_old[0]-size_new[0])
+
+      if size_old[1] <= size_new[1]:
+        start_j = 0
+      else:
+        start_j = np.random.randint(0, size_old[1]-size_new[1])
+
+      if size_old[2] <= size_new[2]:
+        start_k = 0
+      else:
+        start_k = np.random.randint(0, size_old[2]-size_new[2])
+
+      roiFilter.SetIndex([start_i,start_j,start_k])
+
+      label_crop = roiFilter.Execute(label)
+      statFilter = sitk.StatisticsImageFilter()
+      statFilter.Execute(label_crop)
+
+      # will iterate until a sub volume containing label is extracted
+      # pixel_count = seg_crop.GetHeight()*seg_crop.GetWidth()*seg_crop.GetDepth()
+      # if statFilter.GetSum()/pixel_count<self.min_ratio:
+      if statFilter.GetSum()<self.min_pixel:
+        contain_label = self.drop(self.drop_ratio) # has some probabilty to contain patch with empty label
+      else:
+        contain_label = True
+
+    image_crop = roiFilter.Execute(image)
+
+    return {'image': image_crop, 'label': label_crop}
+
+  def drop(self,probability):
+    return random.random() <= probability
+
+class RandomNoise(object):
+  """
+  Randomly noise to the image in a sample. This is usually used for data augmentation.
+  """
+  def __init__(self):
+    self.name = 'Random Noise'
+
+  def __call__(self, sample):
+    self.noiseFilter = sitk.AdditiveGaussianNoiseImageFilter()
+    self.noiseFilter.SetMean(0)
+    self.noiseFilter.SetStandardDeviation(0.1)
+
+    # print("Normalizing image...")
+    image, label = sample['image'], sample['label']
+    image = self.noiseFilter.Execute(image)
+
+    return {'image': image, 'label': label}

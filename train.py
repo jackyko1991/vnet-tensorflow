@@ -15,7 +15,7 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('data_dir', './data',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_integer('batch_size',16,
+tf.app.flags.DEFINE_integer('batch_size',5,
     """Size of batch""")               
 tf.app.flags.DEFINE_integer('patch_size',128,
     """Size of a data patch""")
@@ -39,6 +39,10 @@ tf.app.flags.DEFINE_integer('save_interval',1,
     """Checkpoint save interval (epochs)""")
 tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
     """Directory where to write checkpoint""")
+tf.app.flags.DEFINE_float('drop_ratio',0.5,
+    """Probability to drop a cropped area if the label is empty. All empty patches will be droped for 0 and accept all cropped patches if set to 1""")
+tf.app.flags.DEFINE_integer('min_pixel',10,
+    """Minimum non-zero pixels in the cropped label""")
 
 def placeholder_inputs(input_batch_shape, output_batch_shape):
     """Generate placeholder variables to represent the the input tensors.
@@ -81,53 +85,29 @@ def train():
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):
             # create transformations to image and labels
-            normalize = NiftiDataset.Normalization()
+            transforms = [
+                NiftiDataset.Normalization(),
+                NiftiDataset.Resample(0.4356),
+                NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
+                NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
+                NiftiDataset.RandomNoise()
+                ]
 
-            tranforms = [normalize]
-
-            # create a nifti dataset class to import medical image data by simpleitk
-            # niftiDataset = NiftiDataset(
-            #     data_dir=train_data_dir,
-            #     input_batch_shape=input_batch_shape,
-            #     input_batch_shape=output_batch_shape,
-            #     image_filename=image_filename,
-            #     label_filename=image_filename,
-            #     normalization=True)
-
-            trainDataset = NiftiDataset.NiftiDataset(
+            TrainDataset = NiftiDataset.NiftiDataset(
                 data_dir=train_data_dir,
                 image_filename=image_filename,
                 label_filename=label_filename,
-                transforms=tranforms,
+                transforms=transforms,
                 train=True
                 )
 
-            dataset = trainDataset.get_dataset()
-            # dataset = NDI.inputs(train_data_dir,input_batch_shape,output_batch_shape)
+            trainDataset = TrainDataset.get_dataset()
+            trainDataset = trainDataset.shuffle(buffer_size=10)
+            print("batch size =",FLAGS.batch_size)
+            trainDataset = trainDataset.batch(FLAGS.batch_size)
 
-        iterator = dataset.make_initializable_iterator()
+        iterator = trainDataset.make_one_shot_iterator()
         next_element = iterator.get_next()
-
-        with tf.Session() as sess:
-            for _ in range(100):
-                sess.run(iterator.initializer)
-                while True:
-                    try:
-                        sess.run(next_element)
-                    except tf.errors.OutOfRangeError:
-                        break
-        
-        # with tf.Session() as sess:
-        #     sess.run(iterator.initializer, feed_dict={limit: 10})
-        #     for i in range(10):
-        #         value = sess.run(next_element)
-
-            # train_generator = NDI.BatchGenerator(train_data_dir,
-            #     input_batch_shape,
-            #     output_batch_shape,
-            #     image_filename=image_filename,
-            #     label_filename=label_filename,
-            #     shuffle=True)
 
         # # Initialize the model
         # logits = VNet.v_net(image_placeholder,input_batch_shape[4],output_batch_shape[4])
@@ -148,12 +128,48 @@ def train():
         #     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=labels_placeholder))
         # tf.summary.scalar('loss',loss)
 
-        # # Training Op
+        # Training Op
         # with tf.name_scope("training"):
         #     optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
         #     train_op = optimizer.minimize(
         #         loss=loss,
         #         global_step=global_step)
+
+        # training cycle
+        with tf.Session() as sess:
+            # Initialize all variables
+            sess.run(tf.global_variables_initializer())
+
+            print("{} Start training...".format(datetime.datetime.now()))
+
+            # loop over epochs
+            for epoch in range(FLAGS.epochs):
+                print("{} Epoch {} starts".format(datetime.datetime.now(),epoch+1))
+
+                # # initialize iterator
+                # sess.run(iterator.initializer)
+                while True:
+                    try:
+                        [image, label] = sess.run(next_element)
+                        print(image.shape)
+                        print(label.shape)
+                        # print(tf.shape(sess.run(next_element)))
+                    except tf.errors.OutOfRangeError:
+                        break
+
+                    #     
+        #     for epoch in range(FLAGS.epochs):
+        #         
+            
+        #         step=0
+        #         while step < train_batches_per_epoch:
+        #             # Get a batch of image and labels
+        #             image_batch, label_batch = train_generator.next_batch()
+        
+
+
+
+
         
         # # Evaluation op: Accuracy of model
         # with tf.name_scope("accuracy"):
