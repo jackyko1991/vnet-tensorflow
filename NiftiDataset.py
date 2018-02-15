@@ -44,6 +44,7 @@ class NiftiDataset(object):
       self.input_parser, [image_path, label_path], [tf.float32,tf.int32])))
 
     self.dataset = dataset
+    self.data_size = len(image_paths)
     return self.dataset
 
   def read_image(self,path):
@@ -70,7 +71,7 @@ class NiftiDataset(object):
     image_np = np.asarray(image_np,np.float32)
     label_np = np.asarray(label_np,np.int32)
 
-    return [image_np, label_np]
+    return image_np, label_np
 
 class Normalization(object):
   """

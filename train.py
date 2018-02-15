@@ -15,7 +15,7 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('data_dir', './data',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_integer('batch_size',5,
+tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
 tf.app.flags.DEFINE_integer('patch_size',128,
     """Size of a data patch""")
@@ -43,6 +43,8 @@ tf.app.flags.DEFINE_float('drop_ratio',0.5,
     """Probability to drop a cropped area if the label is empty. All empty patches will be droped for 0 and accept all cropped patches if set to 1""")
 tf.app.flags.DEFINE_integer('min_pixel',10,
     """Minimum non-zero pixels in the cropped label""")
+tf.app.flags.DEFINE_integer('shuffle_buffer_size',5,
+    """Number of elements used in shuffle buffer""")
 
 def placeholder_inputs(input_batch_shape, output_batch_shape):
     """Generate placeholder variables to represent the the input tensors.
@@ -102,38 +104,39 @@ def train():
                 )
 
             trainDataset = TrainDataset.get_dataset()
-            trainDataset = trainDataset.shuffle(buffer_size=10)
+            trainDataset = trainDataset.shuffle(buffer_size=5)
             print("batch size =",FLAGS.batch_size)
             trainDataset = trainDataset.batch(FLAGS.batch_size)
 
         iterator = trainDataset.make_one_shot_iterator()
         next_element = iterator.get_next()
 
-        # # Initialize the model
-        # logits = VNet.v_net(image_placeholder,input_batch_shape[4],output_batch_shape[4])
+        # Initialize the model
+        logits = VNet.v_net(image_placeholder,input_batch_shape[4],output_batch_shape[4])
 
-        # # Exponential decay learning rate
-        # train_batches_per_epoch = math.ceil(train_generator.data_size/FLAGS.batch_size)
-        # decay_steps = train_batches_per_epoch*FLAGS.decay_steps
+        # Exponential decay learning rate
+        train_batches_per_epoch = math.ceil(TrainDataset.data_size/FLAGS.batch_size)
+        decay_steps = train_batches_per_epoch*FLAGS.decay_steps
 
-        # learning_rate = tf.train.exponential_decay(FLAGS.init_learning_rate,
-        #     global_step,
-        #     decay_steps,
-        #     FLAGS.decay_factor,
-        #     staircase=True)
-        # tf.summary.scalar('learning_rate', learning_rate)
+        with tf.name_scope("learning_rate"):
+            learning_rate = tf.train.exponential_decay(FLAGS.init_learning_rate,
+                global_step,
+                decay_steps,
+                FLAGS.decay_factor,
+                staircase=True)
+        tf.summary.scalar('learning_rate', learning_rate)
 
-        # # Op for calculating loss
-        # with tf.name_scope("cross_entropy"):
-        #     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=labels_placeholder))
-        # tf.summary.scalar('loss',loss)
+        # Op for calculating loss
+        with tf.name_scope("cross_entropy"):
+            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=labels_placeholder))
+        tf.summary.scalar('loss',loss)
 
         # Training Op
-        # with tf.name_scope("training"):
-        #     optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-        #     train_op = optimizer.minimize(
-        #         loss=loss,
-        #         global_step=global_step)
+        with tf.name_scope("training"):
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+            train_op = optimizer.minimize(
+                loss=loss,
+                global_step=global_step)
 
         # training cycle
         with tf.Session() as sess:
@@ -146,14 +149,13 @@ def train():
             for epoch in range(FLAGS.epochs):
                 print("{} Epoch {} starts".format(datetime.datetime.now(),epoch+1))
 
-                # # initialize iterator
-                # sess.run(iterator.initializer)
                 while True:
                     try:
                         [image, label] = sess.run(next_element)
-                        print(image.shape)
-                        print(label.shape)
-                        # print(tf.shape(sess.run(next_element)))
+
+                        image = image.reshape(input_batch_shape)
+                        print(sess.run(logits, feed_dict={image_placeholder: image}))
+
                     except tf.errors.OutOfRangeError:
                         break
 
