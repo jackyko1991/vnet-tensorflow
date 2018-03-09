@@ -61,8 +61,8 @@ def placeholder_inputs(input_batch_shape, output_batch_shape):
     # rather than the full size of the train or test ckpt sets.
     # batch_size = -1
 
-    images_placeholder = tf.placeholder(tf.float32, shape=input_batch_shape)
-    labels_placeholder = tf.placeholder(tf.int32, shape=output_batch_shape)   
+    images_placeholder = tf.placeholder(tf.float32, shape=input_batch_shape, name="images_placeholder")
+    labels_placeholder = tf.placeholder(tf.int32, shape=output_batch_shape, name="labels_placeholder")   
    
     return images_placeholder, labels_placeholder
 
@@ -75,7 +75,13 @@ def train():
         input_batch_shape = (FLAGS.batch_size, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
         output_batch_shape = (FLAGS.batch_size, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
         
-        image_placeholder, labels_placeholder = placeholder_inputs(input_batch_shape,output_batch_shape)
+        images_placeholder, labels_placeholder = placeholder_inputs(input_batch_shape,output_batch_shape)
+
+        images_log = tf.cast(images_placeholder[:,:,:,int(FLAGS.patch_layer/2),:], dtype=tf.uint8)
+        labels_log = tf.cast(tf.scalar_mul(255,labels_placeholder[:,:,:,int(FLAGS.patch_layer/2),:]), dtype=tf.uint8)
+
+        tf.summary.image("image", images_log,max_outputs=FLAGS.batch_size)
+        tf.summary.image("label", labels_log,max_outputs=FLAGS.batch_size)
 
         # Get images and labels
         train_data_dir = os.path.join(FLAGS.data_dir,'training')
@@ -107,12 +113,13 @@ def train():
             trainDataset = trainDataset.shuffle(buffer_size=5)
             print("batch size =",FLAGS.batch_size)
             trainDataset = trainDataset.batch(FLAGS.batch_size)
+            
 
-        iterator = trainDataset.make_one_shot_iterator()
+        iterator = trainDataset.make_initializable_iterator()
         next_element = iterator.get_next()
 
         # Initialize the model
-        logits = VNet.v_net(image_placeholder,input_batch_shape[4],output_batch_shape[4])
+        logits = VNet.v_net(images_placeholder,input_batch_shape[4],output_batch_shape[4])
 
         # Exponential decay learning rate
         train_batches_per_epoch = math.ceil(TrainDataset.data_size/FLAGS.batch_size)
@@ -126,38 +133,62 @@ def train():
                 staircase=True)
         tf.summary.scalar('learning_rate', learning_rate)
 
-        # Op for calculating loss
-        with tf.name_scope("cross_entropy"):
-            loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=labels_placeholder))
-        tf.summary.scalar('loss',loss)
+        # # Op for calculating loss
+        # with tf.name_scope("cross_entropy"):
+        #     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=labels_placeholder))
+        # tf.summary.scalar('loss',loss)
 
-        # Training Op
-        with tf.name_scope("training"):
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-            train_op = optimizer.minimize(
-                loss=loss,
-                global_step=global_step)
+        # # Argmax Op to generate label from logits
+        # with tf.name_scope("predicted_label"):
+        #     pred = tf.argmax(logits, axis=4 , name="prediction")
+
+        # # Training Op
+        # with tf.name_scope("training"):
+        #     optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+        #     train_op = optimizer.minimize(
+        #         loss=loss,
+        #         global_step=global_step)
+
+        # saver
+        print("Setting up Saver...")
+        saver = tf.train.Saver()
+        summary_op = tf.summary.merge_all()
 
         # training cycle
         with tf.Session() as sess:
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
-
             print("{} Start training...".format(datetime.datetime.now()))
+
+            # summary writer for tensorboard
+            summary_writer = tf.summary.FileWriter(FLAGS.tensorboard_dir, sess.graph)
 
             # loop over epochs
             for epoch in range(FLAGS.epochs):
+                # initialize iterator in each new epoch
+                sess.run(iterator.initializer)
                 print("{} Epoch {} starts".format(datetime.datetime.now(),epoch+1))
 
                 while True:
                     try:
                         [image, label] = sess.run(next_element)
 
-                        image = image.reshape(input_batch_shape)
-                        print(sess.run(logits, feed_dict={image_placeholder: image}))
+                        image = image[:,:,:,:,np.newaxis]
+                        label = label[:,:,:,:,np.newaxis]
+
+                        print(image.shape)
+                        print(image.dtype)
+                        print(label.dtype)
+                        print(images_log.shape)
+                        
+                        
+                        summary = sess.run(summary_op, feed_dict={images_placeholder: image, labels_placeholder: label})
+                        # print(sess.run(logits, feed_dict={image_placeholder: image}))
+                        summary_writer.add_summary(summary)
 
                     except tf.errors.OutOfRangeError:
                         break
+                
 
                     #     
         #     for epoch in range(FLAGS.epochs):

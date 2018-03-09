@@ -82,9 +82,14 @@ class Normalization(object):
     self.name = 'Normalization'
 
   def __call__(self, sample):
-    normalizeFilter = sitk.NormalizeImageFilter()
+    # normalizeFilter = sitk.NormalizeImageFilter()
+    # image, label = sample['image'], sample['label']
+    # image = normalizeFilter.Execute(image)
+    resacleFilter = sitk.RescaleIntensityImageFilter()
+    resacleFilter.SetOutputMaximum(255)
+    resacleFilter.SetOutputMinimum(0)
     image, label = sample['image'], sample['label']
-    image = normalizeFilter.Execute(image)
+    image = resacleFilter.Execute(image)
 
     return {'image':image, 'label':label}
 
