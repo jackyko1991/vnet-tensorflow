@@ -140,6 +140,15 @@ def train():
         #         staircase=True)
         tf.summary.scalar('learning_rate', learning_rate)
 
+        # softmax op for probability layer
+        with tf.name_scope("softmax"):
+            softmax_op = tf.nn.softmax(logits,name="softmax")
+        softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_op[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,0]), dtype=tf.uint8)
+        softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_op[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,1]), dtype=tf.uint8)
+
+        tf.summary.image("softmax_0", softmax_log_0,max_outputs=FLAGS.batch_size)
+        tf.summary.image("softmax_1", softmax_log_1,max_outputs=FLAGS.batch_size)
+
         # Op for calculating loss
         with tf.name_scope("cross_entropy"):
             loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -189,7 +198,7 @@ def train():
                         image = image[:,:,:,:,np.newaxis]
                         label = label[:,:,:,:,np.newaxis]
 
-                        print(image.shape)
+                        # print(image.shape)
                         
                         train, summary = sess.run([train_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
                         # print(sess.run(logits, feed_dict={images_placeholder: image}))
@@ -255,10 +264,10 @@ def main(argv=None):
         tf.gfile.DeleteRecursively(FLAGS.checkpoint_dir)
     tf.gfile.MakeDirs(FLAGS.checkpoint_dir)
 
-    # clear tensorboard directory
-    if tf.gfile.Exists(FLAGS.tensorboard_dir):
-        tf.gfile.DeleteRecursively(FLAGS.tensorboard_dir)
-    tf.gfile.MakeDirs(FLAGS.tensorboard_dir)
+    # # clear tensorboard directory
+    # if tf.gfile.Exists(FLAGS.tensorboard_dir):
+    #     tf.gfile.DeleteRecursively(FLAGS.tensorboard_dir)
+    # tf.gfile.MakeDirs(FLAGS.tensorboard_dir)
 
     train()
 
