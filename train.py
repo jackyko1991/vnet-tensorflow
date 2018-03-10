@@ -9,7 +9,7 @@ import os
 import VNet
 import math
 import datetime
-import re
+from tensorflow.python.tools import inspect_checkpoint as chkp
 
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
@@ -199,7 +199,8 @@ def train():
         checkpoint_prefix = os.path.join(FLAGS.checkpoint_dir ,"checkpoint")
 
         # epoch checkpoint manipulation
-        start_epoch = tf.constant(0,name="start_epoch")
+        start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
+        # start_epoch_inc = start_epoch.assign(start_epoch+1)
 
         # training cycle
         with tf.Session() as sess:
@@ -216,9 +217,10 @@ def train():
                 # check if checkpoint exists
                 if os.path.exists(checkpoint_prefix+"-latest"):
                     print("{}: Last checkpoint found at {}, loading...".format(datetime.datetime.now(),FLAGS.checkpoint_dir))
-                    saver.restore(sess, tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest"))
+                    latest_checkpoint_path = tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest")
+                    saver.restore(sess, latest_checkpoint_path)
             
-            print("{}: Last checkpoint epoch: {}".format(datetime.datetime.now(),start_epoch.eval()))
+            # print("{}: Last checkpoint epoch: {}".format(datetime.datetime.now(),start_epoch.eval()))
             print("{}: Last checkpoint global step: {}".format(datetime.datetime.now(),tf.train.global_step(sess, global_step)))
 
             # loop over epochs
@@ -240,7 +242,8 @@ def train():
                         train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 
                     except tf.errors.OutOfRangeError:
-                        tf.add(start_epoch,1).op.run()
+                        # start_epoch_inc.op.run()
+                        # print(start_epoch.eval())
                         # save the model at end of each epoch training
                         print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,FLAGS.checkpoint_dir))
                         saver.save(sess, checkpoint_prefix, 
