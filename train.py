@@ -23,10 +23,10 @@ tf.app.flags.DEFINE_integer('patch_layer',128,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',2000,
     """Number of epochs for training""")
-tf.app.flags.DEFINE_string('train_dir', './tmp/train_log',
-    """Directory where to write training event logs """)
-tf.app.flags.DEFINE_string('tensorboard_dir', './tmp/tensorboard',
-    """Directory where to write tensorboard summary """)
+tf.app.flags.DEFINE_string('log_dir', './tmp/log',
+    """Directory where to write training and testing event logs """)
+# tf.app.flags.DEFINE_string('tensorboard_dir', './tmp/tensorboard',
+#     """Directory where to write tensorboard summary """)
 tf.app.flags.DEFINE_float('init_learning_rate',0.0001,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
@@ -93,7 +93,7 @@ def train():
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):
             # create transformations to image and labels
-            transforms = [
+            trainTransforms = [
                 NiftiDataset.Normalization(),
                 NiftiDataset.Resample(0.4356),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
@@ -105,18 +105,38 @@ def train():
                 data_dir=train_data_dir,
                 image_filename=image_filename,
                 label_filename=label_filename,
-                transforms=transforms,
+                transforms=trainTransforms,
                 train=True
                 )
-
+            
             trainDataset = TrainDataset.get_dataset()
             trainDataset = trainDataset.shuffle(buffer_size=5)
-            print("batch size =",FLAGS.batch_size)
             trainDataset = trainDataset.batch(FLAGS.batch_size)
-            
 
-        iterator = trainDataset.make_initializable_iterator()
-        next_element = iterator.get_next()
+            testTransforms = [
+                NiftiDataset.Normalization(),
+                NiftiDataset.Resample(0.4356),
+                NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
+                NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
+                ]
+
+            TestDataset = NiftiDataset.NiftiDataset(
+                data_dir=train_data_dir,
+                image_filename=image_filename,
+                label_filename=label_filename,
+                transforms=testTransforms,
+                train=True
+            )
+
+            testDataset = TestDataset.get_dataset()
+            testDataset = testDataset.shuffle(buffer_size=5)
+            testDataset = testDataset.batch(FLAGS.batch_size)
+            
+        train_iterator = trainDataset.make_initializable_iterator()
+        next_element_train = train_iterator.get_next()
+
+        test_iterator = testDataset.make_initializable_iterator()
+        next_element_test = test_iterator.get_next()
 
         # Initialize the model
         with tf.name_scope("vnet"):
@@ -151,11 +171,11 @@ def train():
 
         # Op for calculating loss
         with tf.name_scope("cross_entropy"):
-            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+            loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=logits,
                 labels=tf.squeeze(labels_placeholder, 
                 squeeze_dims=[4])))
-        tf.summary.scalar('loss',loss)
+        tf.summary.scalar('loss',loss_op)
 
         # Argmax Op to generate label from logits
         with tf.name_scope("predicted_label"):
@@ -168,7 +188,7 @@ def train():
             # optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
             optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
             train_op = optimizer.minimize(
-                loss=loss,
+                loss=loss_op,
                 global_step=global_step)
 
         # saver
@@ -183,32 +203,51 @@ def train():
             print("{}: Start training...".format(datetime.datetime.now()))
 
             # summary writer for tensorboard
-            summary_writer = tf.summary.FileWriter(FLAGS.tensorboard_dir, sess.graph)
+            train_summary_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
+            test_summary_writer = tf.summary.FileWriter(FLAGS.log_dir + '/test', sess.graph)
+            # summary_writer = tf.summary.FileWriter(FLAGS.tensorboard_dir, sess.graph)
 
             # loop over epochs
             for epoch in range(FLAGS.epochs):
                 # initialize iterator in each new epoch
-                sess.run(iterator.initializer)
+                sess.run(train_iterator.initializer)
+                sess.run(test_iterator.initializer)
                 print("{}: Epoch {} starts".format(datetime.datetime.now(),epoch+1))
 
+                # training phase
                 while True:
                     try:
-                        [image, label] = sess.run(next_element)
+                        # print("{}: global_step {} starts".format(datetime.datetime.now(),tf.train.global_step(sess, global_step)) )
+
+                        [image, label] = sess.run(next_element_train)
 
                         image = image[:,:,:,:,np.newaxis]
                         label = label[:,:,:,:,np.newaxis]
-
-                        # print(image.shape)
                         
                         train, summary = sess.run([train_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
-                        # print(sess.run(logits, feed_dict={images_placeholder: image}))
-                        summary_writer.add_summary(summary, global_step=epoch)
+                        train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 
                     except tf.errors.OutOfRangeError:
                         break
                 
+                # testing phase
+                print("{}: Training of epoch {} finishes, testing start".format(datetime.datetime.now(),epoch))
+                while True:
+                    try:
+                        [image, label] = sess.run(next_element_test)
 
+                        image = image[:,:,:,:,np.newaxis]
+                        label = label[:,:,:,:,np.newaxis]
+                        
+                        loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
+                        test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 
+                    except tf.errors.OutOfRangeError:
+                        break
+
+        # close tensorboard summary writer
+        train_summary_writer.close()
+        test_summary_writer.close()
 
 
         
@@ -254,10 +293,10 @@ def train():
 
 
 def main(argv=None):
-    # clear training log directory
-    if tf.gfile.Exists(FLAGS.train_dir):
-        tf.gfile.DeleteRecursively(FLAGS.train_dir)
-    tf.gfile.MakeDirs(FLAGS.train_dir)
+    # # clear log directory
+    # if tf.gfile.Exists(FLAGS.log_dir):
+    #     tf.gfile.DeleteRecursively(FLAGS.log_dir)
+    # tf.gfile.MakeDirs(FLAGS.log_dir)
 
     # clear checkpoint directory
     if tf.gfile.Exists(FLAGS.checkpoint_dir):
