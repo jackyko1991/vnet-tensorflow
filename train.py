@@ -9,6 +9,7 @@ import os
 import VNet
 import math
 import datetime
+import re
 
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
@@ -25,8 +26,6 @@ tf.app.flags.DEFINE_integer('epochs',2000,
     """Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
-# tf.app.flags.DEFINE_string('tensorboard_dir', './tmp/tensorboard',
-#     """Directory where to write tensorboard summary """)
 tf.app.flags.DEFINE_float('init_learning_rate',0.0001,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
@@ -39,6 +38,8 @@ tf.app.flags.DEFINE_integer('save_interval',1,
     """Checkpoint save interval (epochs)""")
 tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
     """Directory where to write checkpoint""")
+tf.app.flags.DEFINE_bool('restore_training',True,
+    """Restore training from last checkpoint""")
 tf.app.flags.DEFINE_float('drop_ratio',0.5,
     """Probability to drop a cropped area if the label is empty. All empty patches will be droped for 0 and accept all cropped patches if set to 1""")
 tf.app.flags.DEFINE_integer('min_pixel',10,
@@ -195,6 +196,10 @@ def train():
         print("Setting up Saver...")
         saver = tf.train.Saver()
         summary_op = tf.summary.merge_all()
+        checkpoint_prefix = os.path.join(FLAGS.checkpoint_dir ,"checkpoint")
+
+        # epoch checkpoint manipulation
+        start_epoch = tf.constant(0,name="start_epoch")
 
         # training cycle
         with tf.Session() as sess:
@@ -205,10 +210,19 @@ def train():
             # summary writer for tensorboard
             train_summary_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
             test_summary_writer = tf.summary.FileWriter(FLAGS.log_dir + '/test', sess.graph)
-            # summary_writer = tf.summary.FileWriter(FLAGS.tensorboard_dir, sess.graph)
+
+            # restore from checkpoint
+            if FLAGS.restore_training:
+                # check if checkpoint exists
+                if os.path.exists(checkpoint_prefix+"-latest"):
+                    print("{}: Last checkpoint found at {}, loading...".format(datetime.datetime.now(),FLAGS.checkpoint_dir))
+                    saver.restore(sess, tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest"))
+            
+            print("{}: Last checkpoint epoch: {}".format(datetime.datetime.now(),start_epoch.eval()))
+            print("{}: Last checkpoint global step: {}".format(datetime.datetime.now(),tf.train.global_step(sess, global_step)))
 
             # loop over epochs
-            for epoch in range(FLAGS.epochs):
+            for epoch in np.arange(start_epoch.eval(), FLAGS.epochs):
                 # initialize iterator in each new epoch
                 sess.run(train_iterator.initializer)
                 sess.run(test_iterator.initializer)
@@ -217,8 +231,6 @@ def train():
                 # training phase
                 while True:
                     try:
-                        # print("{}: global_step {} starts".format(datetime.datetime.now(),tf.train.global_step(sess, global_step)) )
-
                         [image, label] = sess.run(next_element_train)
 
                         image = image[:,:,:,:,np.newaxis]
@@ -228,10 +240,17 @@ def train():
                         train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 
                     except tf.errors.OutOfRangeError:
+                        tf.add(start_epoch,1).op.run()
+                        # save the model at end of each epoch training
+                        print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,FLAGS.checkpoint_dir))
+                        saver.save(sess, checkpoint_prefix, 
+                            global_step=tf.train.global_step(sess, global_step),
+                            latest_filename="checkpoint-latest")
+                        print("{}: Saving checkpoint succeed".format(datetime.datetime.now()))
                         break
                 
                 # testing phase
-                print("{}: Training of epoch {} finishes, testing start".format(datetime.datetime.now(),epoch))
+                print("{}: Training of epoch {} finishes, testing start".format(datetime.datetime.now(),epoch+1))
                 while True:
                     try:
                         [image, label] = sess.run(next_element_test)
@@ -259,54 +278,17 @@ def train():
         # # add accuracy to summary
         # tf.summary.scalar('accuracy', accuracy)
 
-        # # Merge all summaries
-        # merged_summary = tf.summary.merge_all()
-
-        # # Initialize summary filewriter
-        # if not os.path.exists(FLAGS.tensorboard_dir):
-        #     os.mkdir(FLAGS.tensorboard_dir)
-        # writer = tf.summary.FileWriter(FLAGS.tensorboard_dir)
-
-        # # Initialize svaer for storing model checkpoints
-        # saver = tf.train.Saver()
-
-        # # Start tensorflow session
-        # with tf.Session() as sess:
-        #     # Initialize all variables
-        #     sess.run(tf.global_variables_initializer())
-
-        #     # add model graph to tensorboard
-        #     writer.add_graph(sess.graph)
-
-        #     print("{} Start training...".format(datetime.datetime.now()))
-        #     print("{} Open Tensorboard at --logdir {}".format(datetime.datetime.now(),FLAGS.tensorboard_dir))
-
-        #     # loop over epochs
-        #     for epoch in range(FLAGS.epochs):
-        #         print("{} Epoch {} starts".format(datetime.datetime.now(),epoch+1))
-            
-        #         step=0
-        #         while step < train_batches_per_epoch:
-        #             # Get a batch of image and labels
-        #             image_batch, label_batch = train_generator.next_batch()
-
-
-
 def main(argv=None):
-    # # clear log directory
-    # if tf.gfile.Exists(FLAGS.log_dir):
-    #     tf.gfile.DeleteRecursively(FLAGS.log_dir)
-    # tf.gfile.MakeDirs(FLAGS.log_dir)
+    if not FLAGS.restore_training:
+        # clear log directory
+        if tf.gfile.Exists(FLAGS.log_dir):
+            tf.gfile.DeleteRecursively(FLAGS.log_dir)
+        tf.gfile.MakeDirs(FLAGS.log_dir)
 
-    # clear checkpoint directory
-    if tf.gfile.Exists(FLAGS.checkpoint_dir):
-        tf.gfile.DeleteRecursively(FLAGS.checkpoint_dir)
-    tf.gfile.MakeDirs(FLAGS.checkpoint_dir)
-
-    # # clear tensorboard directory
-    # if tf.gfile.Exists(FLAGS.tensorboard_dir):
-    #     tf.gfile.DeleteRecursively(FLAGS.tensorboard_dir)
-    # tf.gfile.MakeDirs(FLAGS.tensorboard_dir)
+        # clear checkpoint directory
+        if tf.gfile.Exists(FLAGS.checkpoint_dir):
+            tf.gfile.DeleteRecursively(FLAGS.checkpoint_dir)
+        tf.gfile.MakeDirs(FLAGS.checkpoint_dir)
 
     train()
 
