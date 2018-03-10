@@ -27,7 +27,7 @@ tf.app.flags.DEFINE_string('train_dir', './tmp/train_log',
     """Directory where to write training event logs """)
 tf.app.flags.DEFINE_string('tensorboard_dir', './tmp/tensorboard',
     """Directory where to write tensorboard summary """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.1,
+tf.app.flags.DEFINE_float('init_learning_rate',0.0001,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
@@ -119,35 +119,48 @@ def train():
         next_element = iterator.get_next()
 
         # Initialize the model
-        logits = VNet.v_net(images_placeholder,input_batch_shape[4],output_batch_shape[4])
+        with tf.name_scope("vnet"):
+            logits = VNet.v_net(images_placeholder,input_channels = input_batch_shape[4], output_channels =2)
 
-        # Exponential decay learning rate
-        train_batches_per_epoch = math.ceil(TrainDataset.data_size/FLAGS.batch_size)
-        decay_steps = train_batches_per_epoch*FLAGS.decay_steps
+        logits_log_0 = tf.cast(logits[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,0], dtype=tf.uint8)
+        logits_log_1 = tf.cast(logits[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,1], dtype=tf.uint8)
+        tf.summary.image("logits_0", logits_log_0,max_outputs=FLAGS.batch_size)
+        tf.summary.image("logits_1", logits_log_1,max_outputs=FLAGS.batch_size)
+
+        # # Exponential decay learning rate
+        # train_batches_per_epoch = math.ceil(TrainDataset.data_size/FLAGS.batch_size)
+        # decay_steps = train_batches_per_epoch*FLAGS.decay_steps
 
         with tf.name_scope("learning_rate"):
-            learning_rate = tf.train.exponential_decay(FLAGS.init_learning_rate,
-                global_step,
-                decay_steps,
-                FLAGS.decay_factor,
-                staircase=True)
+            learning_rate = FLAGS.init_learning_rate
+        #     learning_rate = tf.train.exponential_decay(FLAGS.init_learning_rate,
+        #         global_step,
+        #         decay_steps,
+        #         FLAGS.decay_factor,
+        #         staircase=True)
         tf.summary.scalar('learning_rate', learning_rate)
 
-        # # Op for calculating loss
-        # with tf.name_scope("cross_entropy"):
-        #     loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits,labels=labels_placeholder))
-        # tf.summary.scalar('loss',loss)
+        # Op for calculating loss
+        with tf.name_scope("cross_entropy"):
+            loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+                logits=logits,
+                labels=tf.squeeze(labels_placeholder, 
+                squeeze_dims=[4])))
+        tf.summary.scalar('loss',loss)
 
-        # # Argmax Op to generate label from logits
-        # with tf.name_scope("predicted_label"):
-        #     pred = tf.argmax(logits, axis=4 , name="prediction")
+        # Argmax Op to generate label from logits
+        with tf.name_scope("predicted_label"):
+            pred = tf.argmax(logits, axis=4 , name="prediction")
+        pred_log = tf.cast(tf.scalar_mul(255,pred[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1]), dtype=tf.uint8)
+        tf.summary.image("pred", pred_log,max_outputs=FLAGS.batch_size)
 
-        # # Training Op
-        # with tf.name_scope("training"):
-        #     optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-        #     train_op = optimizer.minimize(
-        #         loss=loss,
-        #         global_step=global_step)
+        # Training Op
+        with tf.name_scope("training"):
+            # optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
+            train_op = optimizer.minimize(
+                loss=loss,
+                global_step=global_step)
 
         # saver
         print("Setting up Saver...")
@@ -158,7 +171,7 @@ def train():
         with tf.Session() as sess:
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
-            print("{} Start training...".format(datetime.datetime.now()))
+            print("{}: Start training...".format(datetime.datetime.now()))
 
             # summary writer for tensorboard
             summary_writer = tf.summary.FileWriter(FLAGS.tensorboard_dir, sess.graph)
@@ -167,7 +180,7 @@ def train():
             for epoch in range(FLAGS.epochs):
                 # initialize iterator in each new epoch
                 sess.run(iterator.initializer)
-                print("{} Epoch {} starts".format(datetime.datetime.now(),epoch+1))
+                print("{}: Epoch {} starts".format(datetime.datetime.now(),epoch+1))
 
                 while True:
                     try:
@@ -177,28 +190,14 @@ def train():
                         label = label[:,:,:,:,np.newaxis]
 
                         print(image.shape)
-                        print(image.dtype)
-                        print(label.dtype)
-                        print(images_log.shape)
                         
-                        
-                        summary = sess.run(summary_op, feed_dict={images_placeholder: image, labels_placeholder: label})
-                        # print(sess.run(logits, feed_dict={image_placeholder: image}))
-                        summary_writer.add_summary(summary)
+                        train, summary = sess.run([train_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
+                        # print(sess.run(logits, feed_dict={images_placeholder: image}))
+                        summary_writer.add_summary(summary, global_step=epoch)
 
                     except tf.errors.OutOfRangeError:
                         break
                 
-
-                    #     
-        #     for epoch in range(FLAGS.epochs):
-        #         
-            
-        #         step=0
-        #         while step < train_batches_per_epoch:
-        #             # Get a batch of image and labels
-        #             image_batch, label_batch = train_generator.next_batch()
-        
 
 
 
@@ -255,6 +254,11 @@ def main(argv=None):
     if tf.gfile.Exists(FLAGS.checkpoint_dir):
         tf.gfile.DeleteRecursively(FLAGS.checkpoint_dir)
     tf.gfile.MakeDirs(FLAGS.checkpoint_dir)
+
+    # clear tensorboard directory
+    if tf.gfile.Exists(FLAGS.tensorboard_dir):
+        tf.gfile.DeleteRecursively(FLAGS.tensorboard_dir)
+    tf.gfile.MakeDirs(FLAGS.tensorboard_dir)
 
     train()
 
