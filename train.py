@@ -281,7 +281,7 @@ def train():
                     latest_checkpoint_path = tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest")
                     saver.restore(sess, latest_checkpoint_path)
             
-            print("{}: Last checkpoint epoch: {}".format(datetime.datetime.now(),start_epoch.eval()))
+            print("{}: Last checkpoint epoch: {}".format(datetime.datetime.now(),start_epoch.eval()[0]))
             print("{}: Last checkpoint global step: {}".format(datetime.datetime.now(),tf.train.global_step(sess, global_step)))
 
             # loop over epochs
