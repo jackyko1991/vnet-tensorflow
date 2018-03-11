@@ -9,7 +9,6 @@ import os
 import VNet
 import math
 import datetime
-from tensorflow.python.tools import inspect_checkpoint as chkp
 
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
@@ -66,6 +65,55 @@ def placeholder_inputs(input_batch_shape, output_batch_shape):
     labels_placeholder = tf.placeholder(tf.int32, shape=output_batch_shape, name="labels_placeholder")   
    
     return images_placeholder, labels_placeholder
+
+def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
+    """Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
+    of two batch of data, usually be used for binary image segmentation
+    i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
+
+    Parameters
+    -----------
+    output : Tensor
+        A distribution with shape: [batch_size, ....], (any dimensions).
+    target : Tensor
+        The target distribution, format the same with `output`.
+    loss_type : str
+        ``jaccard`` or ``sorensen``, default is ``jaccard``.
+    axis : tuple of int
+        All dimensions are reduced, default ``[1,2,3]``.
+    smooth : float
+        This small value will be added to the numerator and denominator.
+            - If both output and target are empty, it makes sure dice is 1.
+            - If either output or target are empty (all pixels are background), dice = ```smooth/(small_value + smooth)``, then if smooth is very small, dice close to 0 (even the image values lower than the threshold), so in this case, higher smooth can have a higher dice.
+
+    Examples
+    ---------
+    >>> outputs = tl.act.pixel_wise_softmax(network.outputs)
+    >>> dice_loss = 1 - tl.cost.dice_coe(outputs, y_)
+
+    References
+    -----------
+    - `Wiki-Dice <https://en.wikipedia.org/wiki/Sørensen–Dice_coefficient>`__
+
+    """
+    inse = tf.reduce_sum(output * target, axis=axis)
+    if loss_type == 'jaccard':
+        l = tf.reduce_sum(output * output, axis=axis)
+        r = tf.reduce_sum(target * target, axis=axis)
+    elif loss_type == 'sorensen':
+        l = tf.reduce_sum(output, axis=axis)
+        r = tf.reduce_sum(target, axis=axis)
+    else:
+        raise Exception("Unknow loss_type")
+    ## old axis=[0,1,2,3]
+    # dice = 2 * (inse) / (l + r)
+    # epsilon = 1e-5
+    # dice = tf.clip_by_value(dice, 0, 1.0-epsilon) # if all empty, dice = 1
+    ## new haodong
+    dice = (tf.constant(2.0) * tf.cast(inse,dtype=tf.float32) + tf.constant(smooth)) / (tf.cast(l + r, dtype=tf.float32) + tf.constant(smooth))
+    ##
+    dice = tf.reduce_mean(dice)
+    return dice
 
 def train():
     """Train the Vnet model"""
@@ -192,15 +240,28 @@ def train():
                 loss=loss_op,
                 global_step=global_step)
 
+        # Accuracy of model
+        with tf.name_scope("accuracy"):
+            correct_pred = tf.equal(tf.expand_dims(pred,-1), tf.cast(labels_placeholder,dtype=tf.int64))
+            accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+        tf.summary.scalar('accuracy', accuracy)
+
+        # Dice Similarity
+        with tf.name_scope("dice"):
+            sorensen = dice_coe(tf.expand_dims(pred,-1),tf.cast(labels_placeholder,dtype=tf.int64), loss_type='sorensen')
+            jaccard = dice_coe(tf.expand_dims(pred,-1),tf.cast(labels_placeholder,dtype=tf.int64), loss_type='jaccard')
+        tf.summary.scalar('sorensen', sorensen)
+        tf.summary.scalar('jaccard', jaccard)
+
+        # # epoch checkpoint manipulation
+        start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
+        start_epoch_inc = start_epoch.assign(start_epoch+1)
+
         # saver
-        print("Setting up Saver...")
-        saver = tf.train.Saver()
         summary_op = tf.summary.merge_all()
         checkpoint_prefix = os.path.join(FLAGS.checkpoint_dir ,"checkpoint")
-
-        # epoch checkpoint manipulation
-        start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
-        # start_epoch_inc = start_epoch.assign(start_epoch+1)
+        print("Setting up Saver...")
+        saver = tf.train.Saver()
 
         # training cycle
         with tf.Session() as sess:
@@ -220,7 +281,7 @@ def train():
                     latest_checkpoint_path = tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest")
                     saver.restore(sess, latest_checkpoint_path)
             
-            # print("{}: Last checkpoint epoch: {}".format(datetime.datetime.now(),start_epoch.eval()))
+            print("{}: Last checkpoint epoch: {}".format(datetime.datetime.now(),start_epoch.eval()))
             print("{}: Last checkpoint global step: {}".format(datetime.datetime.now(),tf.train.global_step(sess, global_step)))
 
             # loop over epochs
@@ -242,7 +303,7 @@ def train():
                         train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 
                     except tf.errors.OutOfRangeError:
-                        # start_epoch_inc.op.run()
+                        start_epoch_inc.op.run()
                         # print(start_epoch.eval())
                         # save the model at end of each epoch training
                         print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,FLAGS.checkpoint_dir))
@@ -270,16 +331,6 @@ def train():
         # close tensorboard summary writer
         train_summary_writer.close()
         test_summary_writer.close()
-
-
-        
-        # # Evaluation op: Accuracy of model
-        # with tf.name_scope("accuracy"):
-        #     correct_pred = tf.equal(tf.argmax(logits,1), tf.argmax(labels_placeholder,1))
-        #     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-        
-        # # add accuracy to summary
-        # tf.summary.scalar('accuracy', accuracy)
 
 def main(argv=None):
     if not FLAGS.restore_training:
