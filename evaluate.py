@@ -48,6 +48,9 @@ def evaluate():
             )
         
         dataset = Dataset.get_dataset()
+        # in evaluation, load single data in each batch. for fast 
+        # single data computation speed utilizing GPU resources, the batch dimension
+        # is for stacking same size patches iterate through the data
         dataset = dataset.batch(1)
             
     iterator = dataset.make_one_shot_iterator()
