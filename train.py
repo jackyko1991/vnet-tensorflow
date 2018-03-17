@@ -37,6 +37,8 @@ tf.app.flags.DEFINE_integer('save_interval',1,
     """Checkpoint save interval (epochs)""")
 tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
     """Directory where to write checkpoint""")
+tf.app.flags.DEFINE_string('model_dir','./tmp/model',
+    """Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
     """Restore training from last checkpoint""")
 tf.app.flags.DEFINE_float('drop_ratio',0.5,
@@ -257,6 +259,10 @@ def train():
         start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
         start_epoch_inc = start_epoch.assign(start_epoch+1)
 
+        # # save model builder
+        # builder = tf.saved_model.builder.SavedModelBuilder(FLAGS.checkpoint_dir)
+
+
         # saver
         summary_op = tf.summary.merge_all()
         checkpoint_prefix = os.path.join(FLAGS.checkpoint_dir ,"checkpoint")
@@ -343,6 +349,11 @@ def main(argv=None):
         if tf.gfile.Exists(FLAGS.checkpoint_dir):
             tf.gfile.DeleteRecursively(FLAGS.checkpoint_dir)
         tf.gfile.MakeDirs(FLAGS.checkpoint_dir)
+
+        # # clear model directory
+        # if tf.gfile.Exists(FLAGS.model_dir):
+        #     tf.gfile.DeleteRecursively(FLGAS.model_dir)
+        # tf.gfile.MakeDirs(FLAGS.model_dir)
 
     train()
 
