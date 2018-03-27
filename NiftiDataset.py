@@ -55,7 +55,13 @@ class NiftiDataset(object):
   def input_parser(self,image_path, label_path):
     # read image and label
     image = self.read_image(image_path.decode("utf-8"))
-    label = self.read_image(label_path.decode("utf-8"))
+    if self.train:
+      label = self.read_image(label_path.decode("utf-8"))
+    else:
+      print(image.GetSize())
+      label = sitk.Image(image.GetSize(),sitk.sitkUInt32)
+      label.SetOrigin(image.GetOrigin())
+      label.SetSpacing(image.GetSpacing())
 
     sample = {'image':image, 'label':label}
 
@@ -82,9 +88,14 @@ class Normalization(object):
     self.name = 'Normalization'
 
   def __call__(self, sample):
-    normalizeFilter = sitk.NormalizeImageFilter()
+    # normalizeFilter = sitk.NormalizeImageFilter()
+    # image, label = sample['image'], sample['label']
+    # image = normalizeFilter.Execute(image)
+    resacleFilter = sitk.RescaleIntensityImageFilter()
+    resacleFilter.SetOutputMaximum(255)
+    resacleFilter.SetOutputMinimum(0)
     image, label = sample['image'], sample['label']
-    image = normalizeFilter.Execute(image)
+    image = resacleFilter.Execute(image)
 
     return {'image':image, 'label':label}
 
