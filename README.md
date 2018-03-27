@@ -4,6 +4,10 @@ Tensorflow implementation of the V-Net architecture for medical imaging segmenta
 ## Tensorflow implementation of V-Net
 This is a Tensorflow implementation of the [V-Net](https://arxiv.org/abs/1606.04797) architecture used for 3D medical imaging segmentation. This code adopts the tensorflow graph from https://github.com/MiguelMonteiro/VNet-Tensorflow. The whole code covers training, evaluation and prediction modules for a 3D medical image segmentation.
 
+### Visual Represetation of Network
+This is an example a network this code implements.
+![VNetDiagram](VNetDiagram.png)
+
 ### Features
 - 3D data processing ready
 - Augumented patching technique, required less image input
@@ -35,24 +39,35 @@ Known good dependencies
 ### Folder Hierarchy
 All training, testing and evaluation data should put in `./data`
 
-.
-+-- _config.yml
-+-- _drafts
-|   +-- begin-with-the-crazy-ideas.textile
-|   +-- on-simplicity-in-technology.markdown
-+-- _includes
-|   +-- footer.html
-|   +-- header.html
-+-- _layouts
-|   +-- default.html
-|   +-- post.html
-+-- _posts
-|   +-- 2007-10-29-why-every-programmer-should-play-nethack.textile
-|   +-- 2009-04-26-barcamp-boston-4-roundup.textile
-+-- _data
-|   +-- members.yml
-+-- _site
-+-- index.html
+    .
+    ├── ...
+    ├── data                      # All data
+    │   ├── testing               # Put all testing data here
+    |   |   ├── case1            
+    |   |   |   ├── img.nii.gz    # Image For testing
+    |   |   |   └── label.nii.gz  # Corresponding label for testing
+    |   |   ├── case2
+    |   |   ├──...
+    │   ├── training              # Put all training data here
+    |   |   ├── case1             # foldername for the cases is arbitar
+    |   |   |   ├── img.nii.gz    # Image For testing
+    |   |   |   └── label.nii.gz  # Corresponding label for testing
+    |   |   ├── case2
+    |   |   ├──...
+    │   └── evaluation            # Put all evaluation data here
+    ├── tmp
+    |   ├── cktp                  # Tensorflow checkpoints
+    |   └── log                   # Tensorboard logging folder
+    ├── ...
+    
+If you wish to use image and label with filename other than `img.nii.gz` and `label.nii.gz`, please change the following values in `train.py`
+
+```
+image_filename = 'img.nii.gz'
+label_filename = 'label.nii.gz'
+```
+
+In segmentation tasks, image and labels are always in pair, missing either one would terminate the training process.
 
 ### Training
 
