@@ -5,17 +5,17 @@ Tensorflow implementation of the V-Net architecture for medical imaging segmenta
 This is a Tensorflow implementation of the [V-Net](https://arxiv.org/abs/1606.04797) architecture used for 3D medical imaging segmentation. This code adopts the tensorflow graph from https://github.com/MiguelMonteiro/VNet-Tensorflow. The whole code covers training, evaluation and prediction modules for a 3D medical image segmentation.
 
 ### Visual Represetation of Network
-This is an example a network this code implements.
+This is an example of network this code implements.
 ![VNetDiagram](VNetDiagram.png)
 
 ### Features
 - 3D data processing ready
-- Augumented patching technique, required less image input
+- Augumented patching technique, required less image input for training
 - Multichannel input and multiclass output
 - Generic image reader with SimpleITK support (Currently only support .nii/.nii.gz format for convenience, easy to expand to DICOM)
 - Medical image pre-post processing with SimpleITK filters
-- Easy network replace structure
-- Sørensen and Jaccard similarity measurement
+- Easy network replacement structure
+- Sørensen and Jaccard similarity measurement as golden standard in medical image segmentation benchmarking
 - Utilizing medical image headers to retrive space and orentation info after passthrough the network
 
 ## Development Progress
@@ -67,11 +67,11 @@ image_filename = 'img.nii.gz'
 label_filename = 'label.nii.gz'
 ```
 
-In segmentation tasks, image and labels are always in pair, missing either one would terminate the training process.
+In segmentation tasks, images and labels are always in pair, missing either one would terminate the training process.
 
 ### Training
 
-You may run train.py with commandline arguments. To check usage, type ```python train.py -h``` in terminal for all possible training parameters.
+You may run train.py with commandline arguments. To check usage, type ```python train.py -h``` in terminal to list all possible training parameters.
 
 Available training parameters
 ```
@@ -124,7 +124,7 @@ Available training parameters
  ```
 
 #### Image batch preparation
-Typically medical image is large in size when comparing natural images (height x widht x layers x modilty number), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixels but accepting short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
+Typically medical image is large in size when comparing to natural images (height x widht x layers x modilty), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
 
 Here we introduced a data augmentation skills that allows users to normalize and resample medical images in 3D sense. In train.py, you can access to trainTransforms/ testTransforms. Here we combined the advantage of tensorflow dataset api and SimpleITK (SITK) image processing toolkit together. Following is the preprocessing pipeline in SITK side to faciliate image augumentation with limited available memories.
 
