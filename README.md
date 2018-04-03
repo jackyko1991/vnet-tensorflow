@@ -2,21 +2,21 @@
 Tensorflow implementation of the V-Net architecture for medical imaging segmentation.
 
 ## Tensorflow implementation of V-Net
-This is a Tensorflow implementation of the [V-Net](https://arxiv.org/abs/1606.04797) architecture used for 3D medical imaging segmentation. This code adopts the tensorflow graph from https://github.com/MiguelMonteiro/VNet-Tensorflow. The whole code covers training, evaluation and prediction modules for a 3D medical image segmentation.
+This is a Tensorflow implementation of the [V-Net](https://arxiv.org/abs/1606.04797) architecture used for 3D medical imaging segmentation. This code adopts the tensorflow graph from https://github.com/MiguelMonteiro/VNet-Tensorflow. The repository covers training, evaluation and prediction modules for the (multimodal) 3D medical image segmentation in multiple classes.
 
 ### Visual Represetation of Network
-This is an example of network this code implements.
+Here is an example graph of network this code implements. Channel depth may change owning to change in modality number and class number.
 ![VNetDiagram](VNetDiagram.png)
 
 ### Features
 - 3D data processing ready
-- Augumented patching technique, required less image input for training
+- Augumented patching technique, requires less image input for training
 - Multichannel input and multiclass output
-- Generic image reader with SimpleITK support (Currently only support .nii/.nii.gz format for convenience, easy to expand to DICOM)
+- Generic image reader with SimpleITK support (Currently only support .nii/.nii.gz format for convenience, easy to expand to DICOM, tiff and jpg format)
 - Medical image pre-post processing with SimpleITK filters
 - Easy network replacement structure
 - Sørensen and Jaccard similarity measurement as golden standard in medical image segmentation benchmarking
-- Utilizing medical image headers to retrive space and orentation info after passthrough the network
+- Utilizing medical image headers to retrive space and orientation info after passthrough the network
 
 ## Development Progress
 
@@ -67,7 +67,7 @@ image_filename = 'img.nii.gz'
 label_filename = 'label.nii.gz'
 ```
 
-In segmentation tasks, images and labels are always in pair, missing either one would terminate the training process.
+In segmentation tasks, image and label are always in pair, missing either one would terminate the training process.
 
 ### Training
 
@@ -124,9 +124,9 @@ Available training parameters
  ```
 
 #### Image batch preparation
-Typically medical image is large in size when comparing to natural images (height x widht x layers x modilty), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
+Typically medical image is large in size when comparing with natural images (height x widht x layers x modilty), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
 
-Here we introduced a data augmentation skills that allows users to normalize and resample medical images in 3D sense. In train.py, you can access to trainTransforms/ testTransforms. Here we combined the advantage of tensorflow dataset api and SimpleITK (SITK) image processing toolkit together. Following is the preprocessing pipeline in SITK side to faciliate image augumentation with limited available memories.
+Here we introduce serveral data augmentation skills that allow users to normalize and resample medical images in 3D sense. In `train.py`, you can access to `trainTransforms`/`testTransforms`. For general purpose we combine the advantage of tensorflow dataset api and SimpleITK (SITK) image processing toolkit together. Following is the preprocessing pipeline in SITK side to faciliate image augumentation with limited available memories.
 
 1. Image Normalization (fit to 0-255)
 2. Isotropic Resampling (adjustable size, in mm)
