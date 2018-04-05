@@ -175,7 +175,7 @@ There are several parameters you need to set in order manually
 
 Run `evaluate.py` after you have modified the corresponding variables. All data in `./data/evaluate` will be iterated. Segmented label is named as `label_vnet.nii.gz` in same folder of the respective `img.nii.gz`.
 
-You may change output label name by change the line `writer.SetFileName(os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz'))`
+You may change output label name by changing the line `writer.SetFileName(os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz'))`
 
 Note that you should keep preprocessing pipeline similar to the one in `train.py`, but without random cropping and noise.
 
