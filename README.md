@@ -24,7 +24,7 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [x] Tensorboard visualization and logging
 - [x] Resume training from checkpoint
 - [x] Epoch training
-- [ ] Evaluation from single data
+- [x] Evaluation from single data
 - [ ] Multichannel input
 - [x] Multiclass output
 - [ ] C++ inference
@@ -44,17 +44,21 @@ All training, testing and evaluation data should put in `./data`
     ├── data                      # All data
     │   ├── testing               # Put all testing data here
     |   |   ├── case1            
-    |   |   |   ├── img.nii.gz    # Image For testing
+    |   |   |   ├── img.nii.gz    # Image for testing
     |   |   |   └── label.nii.gz  # Corresponding label for testing
     |   |   ├── case2
     |   |   ├──...
     │   ├── training              # Put all training data here
     |   |   ├── case1             # foldername for the cases is arbitar
-    |   |   |   ├── img.nii.gz    # Image For testing
+    |   |   |   ├── img.nii.gz    # Image for testing
     |   |   |   └── label.nii.gz  # Corresponding label for testing
     |   |   ├── case2
     |   |   ├──...
     │   └── evaluation            # Put all evaluation data here
+    |   |   ├── case1             # foldername for the cases is arbitar
+    |   |   |   └── img.nii.gz    # Image for evaluation
+    |   |   ├── case2
+    |   |   ├──...
     ├── tmp
     |   ├── cktp                  # Tensorflow checkpoints
     |   └── log                   # Tensorboard logging folder
@@ -158,7 +162,20 @@ Once TensorBoard is running, navigate your web browser to ```localhost:6006``` t
 Note: ```localhost``` may need to change to localhost name by your own in newer version of Tensorboard.
 
 ### Evaluation
-Under development
+To evaluate image data, first place the data in folder ```./data/evaluate```. Each image data should be placed in separate folder as indicated in the folder hierarchy
+
+There are several parameters you need to set in order manually
+- `model_path`, the default path is at `./tmp/ckpt/checkpoint-<global_step>.meta`
+- `checkpoint_dir`, the default path is at `./tmp/ckpt`
+- `patch_size`, this value need to be same as the one used in training
+- `patch_layer`, this value need to be same as the one used in training
+- `stride_inplane`, this value should be <= `patch_size`
+- `stride_layer`, this value should be <= `patch_layer`
+- `batch_size`, currently only support single batch processing
+
+Run `evaluate.py` after you have modified the corresponding variables. All data in `./data/evaluate` will be iterated. Segmented label is named as `label_vnet.nii.gz` in same folder of the respective `img.nii.gz`.
+
+You may change output label name by change the line `writer.SetFileName(os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz'))`
 
 ## Author
 Jacky Ko jackkykokoko@gmail.com
