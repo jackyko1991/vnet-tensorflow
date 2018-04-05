@@ -17,9 +17,9 @@ tf.app.flags.DEFINE_string('data_dir', './data',
     """Directory of stored data.""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',64,
     """Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',128,
+tf.app.flags.DEFINE_integer('patch_layer',64,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',2000,
     """Number of epochs for training""")
@@ -138,7 +138,7 @@ def train():
         train_data_dir = os.path.join(FLAGS.data_dir,'training')
         test_data_dir = os.path.join(FLAGS.data_dir,'testing')
         # support multiple image input, but here only use single channel, label file should be a single file with different classes
-        image_filename = 'img.nii.gz'
+        image_filename = 'img.nii'
         label_filename = 'label.nii.gz'
 
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
@@ -258,10 +258,6 @@ def train():
         # # epoch checkpoint manipulation
         start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
         start_epoch_inc = start_epoch.assign(start_epoch+1)
-
-        # # save model builder
-        # builder = tf.saved_model.builder.SavedModelBuilder(FLAGS.checkpoint_dir)
-
 
         # saver
         summary_op = tf.summary.merge_all()
