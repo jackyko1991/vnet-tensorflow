@@ -177,5 +177,7 @@ Run `evaluate.py` after you have modified the corresponding variables. All data 
 
 You may change output label name by change the line `writer.SetFileName(os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz'))`
 
+Note that you should keep preprocessing pipeline similar to the one in `train.py`, but without random cropping and noise.
+
 ## Author
 Jacky Ko jackkykokoko@gmail.com
