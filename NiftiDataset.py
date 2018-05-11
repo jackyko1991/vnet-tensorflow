@@ -77,6 +77,10 @@ class NiftiDataset(object):
     image_np = np.asarray(image_np,np.float32)
     label_np = np.asarray(label_np,np.int32)
 
+    # to unify matrix dimension order between SimpleITK([x,y,z]) and numpy([z,y,x])
+    image_np = np.transpose(image_np,(2,1,0))
+    label_np = np.transpose(label_np,(2,1,0))
+
     return image_np, label_np
 
 class Normalization(object):

@@ -21,7 +21,7 @@ tf.app.flags.DEFINE_integer('patch_size',128,
     """Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',128,
     """Number of layers in data patch""")
-tf.app.flags.DEFINE_integer('epochs',2000,
+tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
@@ -41,12 +41,14 @@ tf.app.flags.DEFINE_string('model_dir','./tmp/model',
     """Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
     """Restore training from last checkpoint""")
-tf.app.flags.DEFINE_float('drop_ratio',0.5,
-    """Probability to drop a cropped area if the label is empty. All empty patches will be droped for 0 and accept all cropped patches if set to 1""")
+tf.app.flags.DEFINE_float('drop_ratio',0,
+    """Probability to drop a cropped area if the label is empty. All empty patches will be dropped for 0 and accept all cropped patches if set to 1""")
 tf.app.flags.DEFINE_integer('min_pixel',10,
     """Minimum non-zero pixels in the cropped label""")
 tf.app.flags.DEFINE_integer('shuffle_buffer_size',5,
     """Number of elements used in shuffle buffer""")
+# tf.app.flags.DEFINE_float('class_weight',0.15,
+#     """The weight used for imbalanced classes data. Currently only apply on binary segmentation class (weight for 0th class, (1-weight) for 1st class)""")
 
 def placeholder_inputs(input_batch_shape, output_batch_shape):
     """Generate placeholder variables to represent the the input tensors.
@@ -99,6 +101,7 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
 
     """
     inse = tf.reduce_sum(output * target, axis=axis)
+
     if loss_type == 'jaccard':
         l = tf.reduce_sum(output * output, axis=axis)
         r = tf.reduce_sum(target * target, axis=axis)
@@ -128,25 +131,26 @@ def train():
         
         images_placeholder, labels_placeholder = placeholder_inputs(input_batch_shape,output_batch_shape)
 
-        images_log = tf.cast(images_placeholder[:,:,:,int(FLAGS.patch_layer/2),:], dtype=tf.uint8)
-        labels_log = tf.cast(tf.scalar_mul(255,labels_placeholder[:,:,:,int(FLAGS.patch_layer/2),:]), dtype=tf.uint8)
+        for batch in range(FLAGS.batch_size):
+            images_log = tf.cast(images_placeholder[batch:batch+1,:,:,:,0], dtype=tf.uint8)
+            labels_log = tf.cast(tf.scalar_mul(255,labels_placeholder[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
 
-        tf.summary.image("image", images_log,max_outputs=FLAGS.batch_size)
-        tf.summary.image("label", labels_log,max_outputs=FLAGS.batch_size)
+            tf.summary.image("image", tf.transpose(images_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+            tf.summary.image("label", tf.transpose(labels_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 
         # Get images and labels
         train_data_dir = os.path.join(FLAGS.data_dir,'training')
         test_data_dir = os.path.join(FLAGS.data_dir,'testing')
         # support multiple image input, but here only use single channel, label file should be a single file with different classes
-        image_filename = 'img.nii.gz'
-        label_filename = 'label.nii.gz'
+        image_filename = 'image_windowed.nii'
+        label_filename = 'label.nii'
 
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):
             # create transformations to image and labels
             trainTransforms = [
                 NiftiDataset.Normalization(),
-                NiftiDataset.Resample(0.4356),
+                NiftiDataset.Resample(0.2),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
                 NiftiDataset.RandomNoise()
@@ -166,7 +170,7 @@ def train():
 
             testTransforms = [
                 NiftiDataset.Normalization(),
-                NiftiDataset.Resample(0.4356),
+                NiftiDataset.Resample(0.2),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
                 ]
@@ -193,10 +197,22 @@ def train():
         with tf.name_scope("vnet"):
             logits = VNet.v_net(images_placeholder,input_channels = input_batch_shape[4], output_channels =2)
 
-        logits_log_0 = tf.cast(logits[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,0], dtype=tf.uint8)
-        logits_log_1 = tf.cast(logits[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,1], dtype=tf.uint8)
-        tf.summary.image("logits_0", logits_log_0,max_outputs=FLAGS.batch_size)
-        tf.summary.image("logits_1", logits_log_1,max_outputs=FLAGS.batch_size)
+        # # apply weight to the logic funciton
+        # if FLAGS.class_weight <0 or FLAGS.class_weight>1:
+        #     print("Class weight should between 0 and 1")
+        #     exit()
+
+        # if logits.shape[4] == 2:
+        #     class_weight = tf.constant([FLAGS.class_weight,1.0-FLAGS.class_weight]) 
+        #     weighted_logits = tf.multiply(logits,class_weight)
+        # else:
+        #     weighted_logits = logits
+
+        for batch in range(FLAGS.batch_size):
+            logits_log_0 = tf.cast(logits[batch:batch+1,:,:,:,0], dtype=tf.uint8)
+            logits_log_1 = tf.cast(logits[batch:batch+1,:,:,:,1], dtype=tf.uint8)
+            tf.summary.image("logits_0", tf.transpose(logits_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+            tf.summary.image("logits_1", tf.transpose(logits_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 
         # # Exponential decay learning rate
         # train_batches_per_epoch = math.ceil(TrainDataset.data_size/FLAGS.batch_size)
@@ -214,11 +230,12 @@ def train():
         # softmax op for probability layer
         with tf.name_scope("softmax"):
             softmax_op = tf.nn.softmax(logits,name="softmax")
-        softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_op[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,0]), dtype=tf.uint8)
-        softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_op[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1,1]), dtype=tf.uint8)
 
-        tf.summary.image("softmax_0", softmax_log_0,max_outputs=FLAGS.batch_size)
-        tf.summary.image("softmax_1", softmax_log_1,max_outputs=FLAGS.batch_size)
+        for batch in range(FLAGS.batch_size):
+            softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
+            softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,1]), dtype=tf.uint8)
+            tf.summary.image("softmax_0", tf.transpose(softmax_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+            tf.summary.image("softmax_1", tf.transpose(softmax_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 
         # Op for calculating loss
         with tf.name_scope("cross_entropy"):
@@ -231,16 +248,10 @@ def train():
         # Argmax Op to generate label from logits
         with tf.name_scope("predicted_label"):
             pred = tf.argmax(logits, axis=4 , name="prediction")
-        pred_log = tf.cast(tf.scalar_mul(255,pred[:,:,:,int(FLAGS.patch_layer/2):int(FLAGS.patch_layer/2)+1]), dtype=tf.uint8)
-        tf.summary.image("pred", pred_log,max_outputs=FLAGS.batch_size)
 
-        # Training Op
-        with tf.name_scope("training"):
-            # optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
-            train_op = optimizer.minimize(
-                loss=loss_op,
-                global_step=global_step)
+        for batch in range(FLAGS.batch_size):
+            pred_log = tf.cast(tf.scalar_mul(255,pred[batch:batch+1,:,:,:]), dtype=tf.uint8)
+            tf.summary.image("pred", tf.transpose(pred_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 
         # Accuracy of model
         with tf.name_scope("accuracy"):
@@ -252,16 +263,24 @@ def train():
         with tf.name_scope("dice"):
             sorensen = dice_coe(tf.expand_dims(pred,-1),tf.cast(labels_placeholder,dtype=tf.int64), loss_type='sorensen')
             jaccard = dice_coe(tf.expand_dims(pred,-1),tf.cast(labels_placeholder,dtype=tf.int64), loss_type='jaccard')
+            sorensen_loss = 1. - sorensen
+            jaccard_loss = 1. - jaccard
         tf.summary.scalar('sorensen', sorensen)
         tf.summary.scalar('jaccard', jaccard)
+        tf.summary.scalar('sorensen_loss', sorensen_loss)
+        tf.summary.scalar('jaccard_loss',jaccard_loss)
+
+        # Training Op
+        with tf.name_scope("training"):
+            # optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
+            train_op = optimizer.minimize(
+                loss=loss_op,
+                global_step=global_step)
 
         # # epoch checkpoint manipulation
         start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
         start_epoch_inc = start_epoch.assign(start_epoch+1)
-
-        # # save model builder
-        # builder = tf.saved_model.builder.SavedModelBuilder(FLAGS.checkpoint_dir)
-
 
         # saver
         summary_op = tf.summary.merge_all()
