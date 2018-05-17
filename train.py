@@ -19,7 +19,11 @@ tf.app.flags.DEFINE_integer('batch_size',2,
     """Size of batch""")               
 tf.app.flags.DEFINE_integer('patch_size',64,
     """Size of a data patch""")
+<<<<<<< HEAD
 tf.app.flags.DEFINE_integer('patch_layer',32,
+=======
+tf.app.flags.DEFINE_integer('patch_layer',64,
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
@@ -142,10 +146,15 @@ def train():
         train_data_dir = os.path.join(FLAGS.data_dir,'training')
         test_data_dir = os.path.join(FLAGS.data_dir,'testing')
         # support multiple image input, but here only use single channel, label file should be a single file with different classes
+<<<<<<< HEAD
         image_filename = 'image_windowed.nii'
         label_filename = 'label.nii'
         # image_filename = 'img.nii.gz'
         # label_filename = 'label.nii.gz'
+=======
+        image_filename = 'img.nii'
+        label_filename = 'label.nii.gz'
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
 
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):

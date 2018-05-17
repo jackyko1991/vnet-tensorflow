@@ -58,7 +58,6 @@ class NiftiDataset(object):
     if self.train:
       label = self.read_image(label_path.decode("utf-8"))
     else:
-      print(image.GetSize())
       label = sitk.Image(image.GetSize(),sitk.sitkUInt32)
       label.SetOrigin(image.GetOrigin())
       label.SetSpacing(image.GetSpacing())
@@ -67,7 +66,6 @@ class NiftiDataset(object):
 
     if self.transforms:
       for transform in self.transforms:
-        # print(transform.name)
         sample = transform(sample)
 
     # convert sample to tf tensors

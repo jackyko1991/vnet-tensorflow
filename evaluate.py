@@ -9,7 +9,10 @@ import datetime
 import SimpleITK as sitk
 import math
 import numpy as np
+<<<<<<< HEAD
 from tqdm import tqdm
+=======
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
 
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
@@ -24,9 +27,15 @@ tf.app.flags.DEFINE_integer('patch_size',64,
     """Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
+<<<<<<< HEAD
 tf.app.flags.DEFINE_integer('stride_inplane', 60,
     """Stride size in 2D plane""")
 tf.app.flags.DEFINE_integer('stride_layer',28,
+=======
+tf.app.flags.DEFINE_integer('stride_inplane', 112,
+    """Stride size in 2D plane""")
+tf.app.flags.DEFINE_integer('stride_layer',112,
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
     """Stride size in layer direction""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Setting batch size (currently only accept 1)""")
@@ -53,13 +62,21 @@ def evaluate():
     
     # ops to load data
     # support multiple image input, but here only use single channel, label file should be a single file with different classes
+<<<<<<< HEAD
     # image_filename = 'img.nii.gz'
     image_filename = 'image_windowed.nii'
+=======
+    image_filename = 'img.nii.gz'
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
 
     # create transformations to image and labels
     transforms = [
         NiftiDataset.Normalization(),
+<<<<<<< HEAD
         NiftiDataset.Resample(0.2),
+=======
+        NiftiDataset.Resample(0.4356),
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
         NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer))      
         ]
 
@@ -108,10 +125,13 @@ def evaluate():
                 label_np = sitk.GetArrayFromImage(label_tfm)
                 label_np = np.asarray(label_np,np.int32)
 
+<<<<<<< HEAD
                 # unify numpy and sitk orientation
                 image_np = np.transpose(image_np,(2,1,0))
                 label_np = np.transpose(label_np,(2,1,0))
 
+=======
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
                 # a weighting matrix will be used for averaging the overlapped region
                 weight_np = np.zeros(label_np.shape)
 
@@ -155,7 +175,11 @@ def evaluate():
                 batches = prepare_batch(image_np,ijk_patch_indices)
 
                 # acutal segmentation
+<<<<<<< HEAD
                 for i in tqdm(range(len(batches))):
+=======
+                for i in range(len(batches)):
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
                     batch = batches[i]
                     pred = sess.run('predicted_label/prediction:0', feed_dict={'images_placeholder:0': batch})
                     istart = ijk_patch_indices[i][0][0]
@@ -167,12 +191,18 @@ def evaluate():
                     label_np[istart:iend,jstart:jend,kstart:kend] += pred[0,:,:,:]
                     weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
 
+<<<<<<< HEAD
                 # eliminate overlapping region using the weighted value
                 label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
 
                 # convert back to sitk space
                 label_np = np.transpose(label_np,(2,1,0))
 
+=======
+                # # eliminate overlapping region using the weighted value
+                label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+
+>>>>>>> 43c6fac99f3df69d6fe71c01a74b6ad6bc93d8bd
                 # convert label numpy back to sitk image
                 label_tfm = sitk.GetImageFromArray(label_np)
                 label_tfm.SetOrigin(image_tfm.GetOrigin())
