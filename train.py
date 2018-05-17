@@ -15,17 +15,17 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('data_dir', './data',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_integer('batch_size',1,
+tf.app.flags.DEFINE_integer('batch_size',2,
     """Size of batch""")               
 tf.app.flags.DEFINE_integer('patch_size',64,
     """Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',8,
+tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.000001,
+tf.app.flags.DEFINE_float('init_learning_rate',0.00001,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
@@ -41,9 +41,9 @@ tf.app.flags.DEFINE_string('model_dir','./tmp/model',
     """Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
     """Restore training from last checkpoint""")
-tf.app.flags.DEFINE_float('drop_ratio',0,
+tf.app.flags.DEFINE_float('drop_ratio',0.01,
     """Probability to drop a cropped area if the label is empty. All empty patches will be dropped for 0 and accept all cropped patches if set to 1""")
-tf.app.flags.DEFINE_integer('min_pixel',50,
+tf.app.flags.DEFINE_integer('min_pixel',25,
     """Minimum non-zero pixels in the cropped label""")
 tf.app.flags.DEFINE_integer('shuffle_buffer_size',5,
     """Number of next_element_trains used in shuffle buffer""")
