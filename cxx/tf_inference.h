@@ -1,0 +1,42 @@
+#ifndef TF_INFERENCE_H
+#define TF_INFERENCE_H
+
+#include "itkImage.h"
+#include "itkIntensityWindowingImageFilter.h"
+#include "itkRescaleIntensityImageFilter.h"
+#include "itkResampleImageFilter.h"
+
+#include "tensorflow/core/public/session.h"
+#include "tensorflow/core/public/session_options.h"
+#include "tensorflow/core/protobuf/meta_graph.pb.h"
+
+
+typedef itk::Image<float, 3> ImageType;
+typedef itk::Image<short, 3> LabelImageType;
+
+class TF_Inference
+{
+public:
+	TF_Inference();
+	~TF_Inference();
+
+	void SetImage(ImageType::Pointer);
+	void GetOutput(LabelImageType::Pointer);
+	void SetGraphPath(std::string);
+	void SetCheckpointPath(std::string);
+
+	void Inference();
+
+private:
+	std::string m_graphPath;
+	std::string m_checkpointPath;
+	ImageType::Pointer m_inputImage;
+	tensorflow::Session* m_sess;
+	tensorflow::SessionOptions m_options;
+	tensorflow::GraphDef* m_graphDef;
+
+	int m_patchSize[3] = { 64,64,32 };
+	int m_stride[3] = {64,64,32};
+};
+
+#endif
