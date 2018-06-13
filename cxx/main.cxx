@@ -13,15 +13,12 @@
 
 #include "itkImage.h"
 #include "itkImageFileReader.h"
-#include "main.h"
-//#include "itkImageFileWriter.h"
-
 
 int main() 
 {
 	// load inference image
 	//std::string imagePath = std::string("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/done/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/image_windowed.nii.gz");
-	std::string imagePath = std::string("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/image.nii.gz");
+	std::string imagePath = std::string("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/image_crop.nii");
 
 	// load tensorflow graph
 	std::string graphPath = std::string("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/tmp/graph.pb");
@@ -40,5 +37,5 @@ int main()
 	tf_Inference.SetGraphPath(graphPath);
 	tf_Inference.Inference();
 
-	system("pause");
+	//system("pause");
 }

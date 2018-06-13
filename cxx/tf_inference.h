@@ -5,11 +5,19 @@
 #include "itkIntensityWindowingImageFilter.h"
 #include "itkRescaleIntensityImageFilter.h"
 #include "itkResampleImageFilter.h"
+#include "itkExtractImageFilter.h"
+#include "itkImageRegionIteratorWithIndex.h"
 
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/public/session_options.h"
 #include "tensorflow/core/protobuf/meta_graph.pb.h"
 
+#include <thread>
+#include <future>
+#include <mutex>
+#include "ThreadPool.h"
+
+#include "itkImageFileWriter.h"
 
 typedef itk::Image<float, 3> ImageType;
 typedef itk::Image<short, 3> LabelImageType;
@@ -24,19 +32,30 @@ public:
 	void GetOutput(LabelImageType::Pointer);
 	void SetGraphPath(std::string);
 	void SetCheckpointPath(std::string);
-
+	void SetNumberOfThreads(unsigned int);
 	void Inference();
 
 private:
 	std::string m_graphPath;
 	std::string m_checkpointPath;
 	ImageType::Pointer m_inputImage;
+	LabelImageType::Pointer m_outputImage;
 	tensorflow::Session* m_sess;
 	tensorflow::SessionOptions m_options;
 	tensorflow::GraphDef* m_graphDef;
 
 	int m_patchSize[3] = { 64,64,32 };
 	int m_stride[3] = {64,64,32};
+	int m_batchSize = 1;
+
+	void BatchInference(ImageType::Pointer, LabelImageType::Pointer, std::vector<std::shared_ptr<int>>);
+	//void CropWithIndicies(ImageType::Pointer, ImageType::Pointer, int*);
+
+	// threaded batch inference
+	int m_numberOfThreads = std::thread::hardware_concurrency();
+	int m_bufferPoolSize = 6;
+
+
 };
 
 #endif
