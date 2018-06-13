@@ -96,8 +96,8 @@ void TF_Inference::Inference()
 	windowFilter->SetInput(m_inputImage);
 	windowFilter->SetOutputMaximum(1000);
 	windowFilter->SetWindowMaximum(1000);
-	windowFilter->SetOutputMinimum(-300);
-	windowFilter->SetWindowMinimum(-300);
+	windowFilter->SetOutputMinimum(-1000);
+	windowFilter->SetWindowMinimum(-1000);
 	windowFilter->Update();
 
 	// normalize image
@@ -279,7 +279,6 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 			count++;
 			if (count == patchIndicies.size())
 			{
-				std::cout << "break" << std::endl;
 				break;
 			}
 		}
@@ -317,25 +316,39 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 		croppedLabel->SetRegions(croppedImage->GetLargestPossibleRegion());
 		croppedLabel->Allocate();
 		itk::ImageRegionIteratorWithIndex<LabelImageType> labelIterator(croppedLabel, croppedLabel->GetLargestPossibleRegion());
+		int vol = 0;
 		while (!labelIterator.IsAtEnd())
 		{
 			//std::cout << outputTensorMapped(0, imageIterator.GetIndex()[0], imageIterator.GetIndex()[1], imageIterator.GetIndex()[2]) <<std::endl;
-			labelIterator.Set(outputTensorMapped(0, labelIterator.GetIndex()[0], labelIterator.GetIndex()[1], labelIterator.GetIndex()[2]));
+			labelIterator.Set(outputTensorMapped(
+				0, 
+				labelIterator.GetIndex()[0] - croppedLabel->GetLargestPossibleRegion().GetIndex()[0],
+				labelIterator.GetIndex()[1] - croppedLabel->GetLargestPossibleRegion().GetIndex()[1],
+				labelIterator.GetIndex()[2] - croppedLabel->GetLargestPossibleRegion().GetIndex()[2]));
+			if (outputTensorMapped(
+				0, 
+				labelIterator.GetIndex()[0] - croppedLabel->GetLargestPossibleRegion().GetIndex()[0],
+				labelIterator.GetIndex()[1] - croppedLabel->GetLargestPossibleRegion().GetIndex()[1],
+				labelIterator.GetIndex()[2] - croppedLabel->GetLargestPossibleRegion().GetIndex()[2]) > 0)
+				vol++;
 			++labelIterator;
 		}
 
-		itk::ImageFileWriter<ImageType>::Pointer writer = itk::ImageFileWriter<ImageType>::New();
-		writer->SetInput(croppedImage);
-		writer->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch.nii.gz");
-		writer->Write();
+		if (vol > 100)
+		{
+			itk::ImageFileWriter<ImageType>::Pointer writer = itk::ImageFileWriter<ImageType>::New();
+			writer->SetInput(croppedImage);
+			writer->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch.nii.gz");
+			writer->Write();
 
-		itk::ImageFileWriter<LabelImageType>::Pointer writer2 = itk::ImageFileWriter<LabelImageType>::New();
-		writer2->SetInput(croppedLabel);
-		writer2->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch_label.nii.gz");
-		writer2->Write();
+			itk::ImageFileWriter<LabelImageType>::Pointer writer2 = itk::ImageFileWriter<LabelImageType>::New();
+			writer2->SetInput(croppedLabel);
+			writer2->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch_label.nii.gz");
+			writer2->Write();
 
 
-		system("pause");
+			system("pause");
+		}
 
 		// get data back from thread pool
 		//bufferQueue.front().get()->Print(std::cout);
