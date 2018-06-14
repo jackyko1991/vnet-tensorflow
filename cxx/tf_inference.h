@@ -56,8 +56,6 @@ private:
 	// threaded batch inference
 	int m_numberOfThreads = std::thread::hardware_concurrency();
 	int m_bufferPoolSize = 6;
-
-
 };
 
 #endif

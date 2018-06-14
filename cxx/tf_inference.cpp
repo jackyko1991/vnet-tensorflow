@@ -249,13 +249,12 @@ void TF_Inference::Inference()
 	m_outputImage->Graft(resampleLabelFilter->GetOutput());
 }
 
-ImageType::Pointer CropWithIndicies(ImageType::Pointer input, int* indicies)
+ImageType::Pointer CropWithIndicies(ImageType::Pointer input, int* indicies, std::mutex* mutex)
 {
 	//std::mutex mutex;
-	//mutex.lock();
-	////std::cout << std::this_thread::get_id() << ": " << indicies[0] << " " << indicies[1] << " " << indicies[2] << " " << indicies[3] << " " << indicies[4] << " " << indicies[5] << std::endl;
-	//mutex.unlock();
-
+	mutex->lock();
+	//std::cout << std::this_thread::get_id() << ": " << indicies[0] << " " << indicies[1] << " " << indicies[2] << " " << indicies[3] << " " << indicies[4] << " " << indicies[5] << std::endl;
+	
 	// set indicies to itk region
 	ImageType::IndexType start;
 	start[0] = indicies[0];
@@ -266,6 +265,7 @@ ImageType::Pointer CropWithIndicies(ImageType::Pointer input, int* indicies)
 	size[0] = indicies[1] - indicies[0];
 	size[1] = indicies[3] - indicies[2];
 	size[2] = indicies[5] - indicies[4];
+	
 
 	ImageType::RegionType region(start, size);
 
@@ -282,6 +282,8 @@ ImageType::Pointer CropWithIndicies(ImageType::Pointer input, int* indicies)
 	ImageType::Pointer output = ImageType::New();
 	output->Graft(cropFilter->GetOutput());
 
+	mutex->unlock();
+
 	return output;
 }
 
@@ -292,6 +294,9 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 
 	// initialize thread pool
 	pool.init();
+
+	// initialize a mutex
+	std::mutex mutex;
 
 	// create a weight label to eliminate overlapping region
 	LabelImageType::Pointer weightImage = LabelImageType::New();
@@ -313,7 +318,7 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 			//std::cout << "Filling up buffer (" << bufferQueue.size()+1 <<"/" << m_bufferPoolSize <<")" <<  std::endl;
 
 			//std::cout << "count: " << count+1 <<"/" << patchIndicies.size()<< std::endl;
-			std::future<ImageType::Pointer> future = pool.submit(&CropWithIndicies, inputImage, patchIndicies[count].get());
+			std::future<ImageType::Pointer> future = pool.submit(&CropWithIndicies, inputImage, patchIndicies[count].get(), &mutex);
 			bufferQueue.push(std::move(future));
 			count++;
 			if (count == patchIndicies.size())
@@ -331,7 +336,7 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 		if (patchIndicies.size() - count2 > m_bufferPoolSize)
 		{
 			// immediately insert a new job when queue is empty
-			std::future<ImageType::Pointer> future = pool.submit(&CropWithIndicies, inputImage, patchIndicies[count].get());
+			std::future<ImageType::Pointer> future = pool.submit(&CropWithIndicies, inputImage, patchIndicies[count].get(), &mutex);
 			bufferQueue.push(std::move(future));
 			count++;
 		}
