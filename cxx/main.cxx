@@ -1,18 +1,11 @@
-//#include "tensorflow/cc/client/client_session.h"
-//#include "tensorflow/cc/ops/standard_ops.h"
-//#include "tensorflow/core/framework/tensor.h"
-
 #include "tf_inference.h"
 
-
-//#include "tensorflow/core/public/session.h"
-//#include "tensorflow/core/public/session_options.h"
-//#include "tensorflow/core/protobuf/meta_graph.pb.h"
-
 #include "iostream"
+#include "ctime"
 
 #include "itkImage.h"
 #include "itkImageFileReader.h"
+#include "itkImageFileWriter.h"
 
 int main() 
 {
@@ -31,11 +24,28 @@ int main()
 	imageReader->SetFileName(imagePath);
 	imageReader->Update();
 
+	clock_t cl;
+	cl = clock();
+
 	TF_Inference tf_Inference;
 	tf_Inference.SetImage(imageReader->GetOutput());
 	tf_Inference.SetCheckpointPath(checkpointPath);
 	tf_Inference.SetGraphPath(graphPath);
 	tf_Inference.Inference();
 
-	//system("pause");
+	cl = clock() - cl;
+
+	std::cout << "Inferece time: " << cl/(double)CLOCKS_PER_SEC  << "s"<<std:: endl;  //prints the determined ticks per second (seconds passed)
+
+	//itk::ImageFileWriter<ImageType>::Pointer writer = itk::ImageFileWriter<ImageType>::New();
+	//writer->SetInput(inputImage);
+	//writer->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch.nii.gz");
+	//writer->Write();
+
+	itk::ImageFileWriter<LabelImageType>::Pointer writer2 = itk::ImageFileWriter<LabelImageType>::New();
+	writer2->SetInput(tf_Inference.GetOutput());
+	writer2->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/label_final.nii.gz");
+	writer2->Write();
+
+	system("pause");
 }

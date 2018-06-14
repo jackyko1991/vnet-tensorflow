@@ -7,6 +7,9 @@
 #include "itkResampleImageFilter.h"
 #include "itkExtractImageFilter.h"
 #include "itkImageRegionIteratorWithIndex.h"
+#include "itkDivideImageFilter.h"
+#include "itkBSplineInterpolateImageFunction.h"
+#include "itkNearestNeighborInterpolateImageFunction.h"
 
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/public/session_options.h"
@@ -16,8 +19,6 @@
 #include <future>
 #include <mutex>
 #include "ThreadPool.h"
-
-#include "itkImageFileWriter.h"
 
 typedef itk::Image<float, 3> ImageType;
 typedef itk::Image<short, 3> LabelImageType;
@@ -29,7 +30,8 @@ public:
 	~TF_Inference();
 
 	void SetImage(ImageType::Pointer);
-	void GetOutput(LabelImageType::Pointer);
+	//void GetOutput(LabelImageType::Pointer);
+	LabelImageType::Pointer GetOutput();
 	void SetGraphPath(std::string);
 	void SetCheckpointPath(std::string);
 	void SetNumberOfThreads(unsigned int);

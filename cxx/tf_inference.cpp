@@ -28,8 +28,16 @@ void TF_Inference::SetImage(ImageType::Pointer image)
 	// create the associate label image
 	ImageType::RegionType region = m_outputImage->GetLargestPossibleRegion();
 	m_outputImage->SetRegions(region);
+	m_outputImage->SetDirection(image->GetDirection());
+	m_outputImage->SetOrigin(image->GetOrigin());
+	m_outputImage->SetSpacing(image->GetSpacing());
 	m_outputImage->Allocate();
 	m_outputImage->FillBuffer(0);
+}
+
+LabelImageType::Pointer TF_Inference::GetOutput()
+{
+	return m_outputImage;
 }
 
 void TF_Inference::SetGraphPath(std::string path)
@@ -110,17 +118,20 @@ void TF_Inference::Inference()
 
 	// resample image
 	using ResampleFilterType = itk::ResampleImageFilter<ImageType, ImageType>;
-	ImageType::SpacingType outputSpacing;
-	outputSpacing[0] = 0.2;
-	outputSpacing[1] = 0.2;
-	outputSpacing[2] = 0.2;
+	ImageType::SpacingType outputResampledSpacing;
+	outputResampledSpacing[0] = 0.2;
+	outputResampledSpacing[1] = 0.2;
+	outputResampledSpacing[2] = 0.2;
 
 	ImageType::SizeType outputSize;
 
+	using BSplineInterpolatorType = itk::BSplineInterpolateImageFunction<ImageType, double>;
+	BSplineInterpolatorType::Pointer bsInterpolator = BSplineInterpolatorType::New();
+
 	ResampleFilterType::Pointer resampleFilter = ResampleFilterType::New();
 	resampleFilter->SetInput(rescaleFilter->GetOutput());
-	//resampleFilter->SetInterpolator(2);
-	resampleFilter->SetOutputSpacing(outputSpacing);
+	resampleFilter->SetInterpolator(bsInterpolator);
+	resampleFilter->SetOutputSpacing(outputResampledSpacing);
 
 	if (rescaleFilter->GetOutput()->GetLargestPossibleRegion().GetSize()[0] >= m_patchSize[0] &&
 		rescaleFilter->GetOutput()->GetLargestPossibleRegion().GetSize()[1] >= m_patchSize[1] &&
@@ -128,7 +139,7 @@ void TF_Inference::Inference()
 	{
 		for (int i = 0; i < 3; i++)
 		{
-			outputSize[i] = std::ceil(rescaleFilter->GetOutput()->GetLargestPossibleRegion().GetSize()[i] * rescaleFilter->GetOutput()->GetSpacing()[i] / outputSpacing[i]);
+			outputSize[i] = std::ceil(rescaleFilter->GetOutput()->GetLargestPossibleRegion().GetSize()[i] * rescaleFilter->GetOutput()->GetSpacing()[i] / outputResampledSpacing[i]);
 		}
 	}
 	else
@@ -210,21 +221,40 @@ void TF_Inference::Inference()
 	}
 
 	// create the output label in same size as resampled image
-	LabelImageType::Pointer outputImageResampled = LabelImageType::New();
+	LabelImageType::Pointer outputLabelResampled = LabelImageType::New();
 	ImageType::RegionType region = resampleFilter->GetOutput()->GetLargestPossibleRegion();
-	outputImageResampled->SetRegions(region);
-	outputImageResampled->Allocate();
-	outputImageResampled->FillBuffer(0);
+	outputLabelResampled->SetRegions(region);
+	outputLabelResampled->Allocate();
+	outputLabelResampled->FillBuffer(0);
+	outputLabelResampled->SetOrigin(resampleFilter->GetOutput()->GetOrigin());
+	outputLabelResampled->SetDirection(resampleFilter->GetOutput()->GetDirection());
+	outputLabelResampled->SetSpacing(resampleFilter->GetOutput()->GetSpacing());
 
-	this->BatchInference(resampleFilter->GetOutput(), outputImageResampled, ijkPatchIndicies);
+	this->BatchInference(resampleFilter->GetOutput(), outputLabelResampled, ijkPatchIndicies);
+
+	// reseample the output label back to input space
+	using NNInterpolatorType = itk::NearestNeighborInterpolateImageFunction<LabelImageType, double>;
+	NNInterpolatorType::Pointer nnInterpolator = NNInterpolatorType::New();
+
+	using ResampleLabelFilterType = itk::ResampleImageFilter<LabelImageType, LabelImageType>;
+	ResampleLabelFilterType::Pointer resampleLabelFilter = ResampleLabelFilterType::New();
+	resampleLabelFilter->SetInput(outputLabelResampled);
+	resampleLabelFilter->SetInterpolator(nnInterpolator);
+	resampleLabelFilter->SetOutputSpacing(m_inputImage->GetSpacing());
+	resampleLabelFilter->SetSize(m_inputImage->GetLargestPossibleRegion().GetSize());
+	resampleLabelFilter->SetOutputOrigin(m_inputImage->GetOrigin());
+	resampleLabelFilter->SetOutputDirection(m_inputImage->GetDirection());
+	resampleLabelFilter->Update();
+
+	m_outputImage->Graft(resampleLabelFilter->GetOutput());
 }
 
 ImageType::Pointer CropWithIndicies(ImageType::Pointer input, int* indicies)
 {
-	std::mutex mutex;
-	mutex.lock();
-	std::cout << std::this_thread::get_id() << ": " << indicies[0] << " " << indicies[1] << " " << indicies[2] << " " << indicies[3] << " " << indicies[4] << " " << indicies[5] << std::endl;
-	mutex.unlock();
+	//std::mutex mutex;
+	//mutex.lock();
+	////std::cout << std::this_thread::get_id() << ": " << indicies[0] << " " << indicies[1] << " " << indicies[2] << " " << indicies[3] << " " << indicies[4] << " " << indicies[5] << std::endl;
+	//mutex.unlock();
 
 	// set indicies to itk region
 	ImageType::IndexType start;
@@ -255,7 +285,7 @@ ImageType::Pointer CropWithIndicies(ImageType::Pointer input, int* indicies)
 	return output;
 }
 
-void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType::Pointer outputImage, std::vector<std::shared_ptr<int>> patchIndicies)
+void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType::Pointer outputLabel, std::vector<std::shared_ptr<int>> patchIndicies)
 {
 	// create thread pool
 	ThreadPool pool(m_numberOfThreads);
@@ -263,17 +293,26 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 	// initialize thread pool
 	pool.init();
 
-	//std::map<double*, LabelImageType::Pointer> outputMap;
+	// create a weight label to eliminate overlapping region
+	LabelImageType::Pointer weightImage = LabelImageType::New();
+	weightImage->SetRegions(outputLabel->GetLargestPossibleRegion());
+	weightImage->Allocate();
+	weightImage->SetDirection(outputLabel->GetDirection());
+	weightImage->SetOrigin(outputLabel->GetOrigin());
+	weightImage->SetSpacing(outputLabel->GetSpacing());
+	weightImage->FillBuffer(0);
+
 	std::queue<std::future<ImageType::Pointer>> bufferQueue;
 	bool Finish = false;
 	int count = 0;
+	int count2 = 0;
 	while (!Finish)
 	{
-		while (bufferQueue.size() < m_bufferPoolSize)
+		while (bufferQueue.size() < m_bufferPoolSize && patchIndicies.size()-count2 > m_bufferPoolSize)
 		{
-			std::cout << "Filling up buffer (" << bufferQueue.size() <<"/" << m_bufferPoolSize <<")" <<  std::endl;
+			//std::cout << "Filling up buffer (" << bufferQueue.size()+1 <<"/" << m_bufferPoolSize <<")" <<  std::endl;
 
-			std::cout << "count: " << count <<"/" << patchIndicies.size()<< std::endl;
+			//std::cout << "count: " << count+1 <<"/" << patchIndicies.size()<< std::endl;
 			std::future<ImageType::Pointer> future = pool.submit(&CropWithIndicies, inputImage, patchIndicies[count].get());
 			bufferQueue.push(std::move(future));
 			count++;
@@ -289,9 +328,15 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 
 		ImageType::Pointer croppedImage = bufferQueue.front().get();
 		bufferQueue.pop();
+		if (patchIndicies.size() - count2 > m_bufferPoolSize)
+		{
+			// immediately insert a new job when queue is empty
+			std::future<ImageType::Pointer> future = pool.submit(&CropWithIndicies, inputImage, patchIndicies[count].get());
+			bufferQueue.push(std::move(future));
+			count++;
+		}
+
 		itk::ImageRegionIteratorWithIndex<ImageType> imageIterator(croppedImage, croppedImage->GetLargestPossibleRegion());
-		
-		//croppedImage->Print(std::cout);
 
 		while (!imageIterator.IsAtEnd())
 		{
@@ -311,81 +356,40 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 		auto statusPred = m_sess->Run(input, { "predicted_label/prediction:0" }, {}, &predict);
 		auto outputTensorMapped = predict[0].tensor<long long int, 4>();
 
-		// convert output tensor to itk label image
-		LabelImageType::Pointer croppedLabel = LabelImageType::New();
-		croppedLabel->SetRegions(croppedImage->GetLargestPossibleRegion());
-		croppedLabel->Allocate();
-		itk::ImageRegionIteratorWithIndex<LabelImageType> labelIterator(croppedLabel, croppedLabel->GetLargestPossibleRegion());
-		int vol = 0;
+		itk::ImageRegionIteratorWithIndex<LabelImageType> labelIterator(outputLabel, croppedImage->GetLargestPossibleRegion());
+		itk::ImageRegionIteratorWithIndex<LabelImageType> weightIterator(weightImage, croppedImage->GetLargestPossibleRegion());
+
+		// iterators need to run separately
 		while (!labelIterator.IsAtEnd())
 		{
-			//std::cout << outputTensorMapped(0, imageIterator.GetIndex()[0], imageIterator.GetIndex()[1], imageIterator.GetIndex()[2]) <<std::endl;
-			labelIterator.Set(outputTensorMapped(
-				0, 
-				labelIterator.GetIndex()[0] - croppedLabel->GetLargestPossibleRegion().GetIndex()[0],
-				labelIterator.GetIndex()[1] - croppedLabel->GetLargestPossibleRegion().GetIndex()[1],
-				labelIterator.GetIndex()[2] - croppedLabel->GetLargestPossibleRegion().GetIndex()[2]));
-			if (outputTensorMapped(
-				0, 
-				labelIterator.GetIndex()[0] - croppedLabel->GetLargestPossibleRegion().GetIndex()[0],
-				labelIterator.GetIndex()[1] - croppedLabel->GetLargestPossibleRegion().GetIndex()[1],
-				labelIterator.GetIndex()[2] - croppedLabel->GetLargestPossibleRegion().GetIndex()[2]) > 0)
-				vol++;
+			labelIterator.Set(labelIterator.Get()+
+				outputTensorMapped(
+					0, 
+					labelIterator.GetIndex()[0] - croppedImage->GetLargestPossibleRegion().GetIndex()[0],
+					labelIterator.GetIndex()[1] - croppedImage->GetLargestPossibleRegion().GetIndex()[1],
+					labelIterator.GetIndex()[2] - croppedImage->GetLargestPossibleRegion().GetIndex()[2]));
 			++labelIterator;
 		}
 
-		if (vol > 100)
+		while (!weightIterator.IsAtEnd())
 		{
-			itk::ImageFileWriter<ImageType>::Pointer writer = itk::ImageFileWriter<ImageType>::New();
-			writer->SetInput(croppedImage);
-			writer->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch.nii.gz");
-			writer->Write();
-
-			itk::ImageFileWriter<LabelImageType>::Pointer writer2 = itk::ImageFileWriter<LabelImageType>::New();
-			writer2->SetInput(croppedLabel);
-			writer2->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch_label.nii.gz");
-			writer2->Write();
-
-
-			system("pause");
+			weightIterator.Set(weightIterator.Get() + 1);
+			++weightIterator;
 		}
 
-		// get data back from thread pool
-		//bufferQueue.front().get()->Print(std::cout);
-		
+		std::cout << "Progress: "<<count2+1 << "/" << patchIndicies.size() << std::endl;
+		count2++;
 
-		// convert itk image to tensorflow tensor
-		//tensorflow::Tensor inputTensor(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1,64,64,32,1 }));
-		//
-		//auto inputTensorMapped = inputTensor.tensor<float, 5>();
-
-		//float count = 0;
-
-		//for (int i = 0; i < 64; i++)
-		//{
-		//	for (int j = 0; j < 64; j++)
-		//	{
-		//		for (int k = 0; k < 32; k++)
-		//		{
-		//			inputTensorMapped(0, i, j, k, 0) = count;
-		//			count++;
-		//		}
-		//	}
-		//}
-
-		//std::vector<std::pair<std::string, tensorflow::Tensor>> input;
-		//std::vector<tensorflow::Tensor> answer;
-
-		//input.emplace_back(std::string("images_placeholder:0"), inputTensor);
-
-		//auto statusPred = sess->Run(input, { "predicted_label/prediction:0" }, {}, &answer);
-
-
-		//system("pause");
-
-		if (count == patchIndicies.size())
+		if (count2 == patchIndicies.size())
 			Finish = true;
 	}
 
 	pool.shutdown();
+
+	// divide label by weight
+	itk::DivideImageFilter<LabelImageType, LabelImageType, LabelImageType>::Pointer divideFilter = itk::DivideImageFilter<LabelImageType, LabelImageType, LabelImageType>::New();
+	divideFilter->SetInput1(outputLabel);
+	divideFilter->SetInput2(weightImage);
+	divideFilter->Update();
+	outputLabel->Graft(divideFilter->GetOutput());
 }
