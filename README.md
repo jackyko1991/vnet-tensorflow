@@ -27,7 +27,7 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [x] Evaluation from single data
 - [ ] Multichannel input
 - [x] Multiclass output
-- [ ] C++ inference
+- [x] C++ inference
 
 ## Usage
 ### Required Libraries
@@ -178,6 +178,9 @@ Run `evaluate.py` after you have modified the corresponding variables. All data 
 You may change output label name by changing the line `writer.SetFileName(os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz'))`
 
 Note that you should keep preprocessing pipeline similar to the one in `train.py`, but without random cropping and noise.
+
+## C++ Inference
+We provide a C++ inference example under directory [cxx](./cxx). For C++ implementation, please follow the guide [here](./cxx/README.md)
 
 ## Author
 Jacky Ko jackkykokoko@gmail.com
