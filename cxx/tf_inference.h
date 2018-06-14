@@ -30,11 +30,11 @@ public:
 	~TF_Inference();
 
 	void SetImage(ImageType::Pointer);
-	//void GetOutput(LabelImageType::Pointer);
 	LabelImageType::Pointer GetOutput();
 	void SetGraphPath(std::string);
 	void SetCheckpointPath(std::string);
 	void SetNumberOfThreads(unsigned int);
+	void SetBufferPoolSize(unsigned int);
 	void Inference();
 
 private:
@@ -47,7 +47,7 @@ private:
 	tensorflow::GraphDef* m_graphDef;
 
 	int m_patchSize[3] = { 64,64,32 };
-	int m_stride[3] = {64,64,32};
+	int m_stride[3] = { 64,64,32 };
 	int m_batchSize = 1;
 
 	void BatchInference(ImageType::Pointer, LabelImageType::Pointer, std::vector<std::shared_ptr<int>>);

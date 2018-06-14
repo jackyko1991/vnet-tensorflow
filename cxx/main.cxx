@@ -17,7 +17,6 @@ int main()
 	std::string graphPath = std::string("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/tmp/graph.pb");
 	std::string checkpointPath = std::string("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/tmp/ckpt/checkpoint-67591.meta");
 
-
 	using ImageReaderType = itk::ImageFileReader<ImageType>;
 
 	ImageReaderType::Pointer imageReader = ImageReaderType::New();
@@ -37,15 +36,10 @@ int main()
 
 	std::cout << "Inferece time: " << cl/(double)CLOCKS_PER_SEC  << "s"<<std:: endl;  //prints the determined ticks per second (seconds passed)
 
-	//itk::ImageFileWriter<ImageType>::Pointer writer = itk::ImageFileWriter<ImageType>::New();
-	//writer->SetInput(inputImage);
-	//writer->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/patch.nii.gz");
-	//writer->Write();
-
-	itk::ImageFileWriter<LabelImageType>::Pointer writer2 = itk::ImageFileWriter<LabelImageType>::New();
-	writer2->SetInput(tf_Inference.GetOutput());
-	writer2->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/label_final.nii.gz");
-	writer2->Write();
+	itk::ImageFileWriter<LabelImageType>::Pointer writer = itk::ImageFileWriter<LabelImageType>::New();
+	writer->SetInput(tf_Inference.GetOutput());
+	writer->SetFileName("D:/projects/Deep_Learning/tensorflow/vnet-tensorflow/data/raw_data/nii/test/13302970698_20170717_2.16.840.114421.12234.9553621213.9585157213/label_final.nii.gz");
+	writer->Write();
 
 	system("pause");
 }

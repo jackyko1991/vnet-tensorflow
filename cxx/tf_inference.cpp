@@ -63,6 +63,11 @@ void TF_Inference::SetNumberOfThreads(unsigned int numOfThreads)
 	}
 }
 
+void TF_Inference::SetBufferPoolSize(unsigned int size)
+{
+	m_bufferPoolSize = size;
+}
+
 void TF_Inference::Inference()
 {
 	// load the graph proto file
@@ -382,7 +387,10 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 			++weightIterator;
 		}
 
-		std::cout << "Progress: "<<count2+1 << "/" << patchIndicies.size() << std::endl;
+		if (count2 % int(patchIndicies.size()*0.01) == 0)
+		{
+			std::cout << "Progress: " << count2 + 1 << "/" << patchIndicies.size() << std::endl;
+		}
 		count2++;
 
 		if (count2 == patchIndicies.size())
