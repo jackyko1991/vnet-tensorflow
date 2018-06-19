@@ -14,19 +14,21 @@ from tqdm import tqdm
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir','./data/evaluate',
+# tf.app.flags.DEFINE_string('data_dir','./data/evaluate',
+#     """Directory of evaluation data""")
+tf.app.flags.DEFINE_string('data_dir','./data/raw_data/nii/batch5',
     """Directory of evaluation data""")
-tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-67591.meta',
+tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-377335.meta',
     """Path to saved models""")
 tf.app.flags.DEFINE_string('checkpoint_dir','./tmp/ckpt',
     """Directory of saved checkpoints""")
-tf.app.flags.DEFINE_integer('patch_size',64,
+tf.app.flags.DEFINE_integer('patch_size',256,
     """Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',32,
+tf.app.flags.DEFINE_integer('patch_layer',8,
     """Number of layers in data patch""")
-tf.app.flags.DEFINE_integer('stride_inplane', 60,
+tf.app.flags.DEFINE_integer('stride_inplane', 256,
     """Stride size in 2D plane""")
-tf.app.flags.DEFINE_integer('stride_layer',28,
+tf.app.flags.DEFINE_integer('stride_layer',8,
     """Stride size in layer direction""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Setting batch size (currently only accept 1)""")
@@ -53,7 +55,8 @@ def evaluate():
     
     # ops to load data
     # support multiple image input, but here only use single channel, label file should be a single file with different classes
-    image_filename = 'img.nii.gz'
+    # image_filename = 'img.nii.gz'
+    image_filename = 'image_windowed.nii'
 
     # create transformations to image and labels
     transforms = [
@@ -65,8 +68,8 @@ def evaluate():
     with tf.Session() as sess:  
         print("{}: Start evaluation...".format(datetime.datetime.now()))
 
-        # imported_meta.restore(sess, tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest"))
-        imported_meta.restore(sess, FLAGS.model_path)
+        imported_meta.restore(sess, tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest"))
+        # imported_meta.restore(sess, FLAGS.model_path)
         print("{}: Restore checkpoint success".format(datetime.datetime.now()))
         
         for case in os.listdir(FLAGS.data_dir):
@@ -171,9 +174,6 @@ def evaluate():
 
                 # convert back to sitk space
                 label_np = np.transpose(label_np,(2,1,0))
-
-                # # eliminate overlapping region using the weighted value
-                label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
 
                 # convert label numpy back to sitk image
                 label_tfm = sitk.GetImageFromArray(label_np)
