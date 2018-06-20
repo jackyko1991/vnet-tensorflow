@@ -10,6 +10,8 @@
 #include "itkDivideImageFilter.h"
 #include "itkBSplineInterpolateImageFunction.h"
 #include "itkNearestNeighborInterpolateImageFunction.h"
+#include "itkCastImageFilter.h"
+#include "itkAddImageFilter.h"
 
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/public/session_options.h"

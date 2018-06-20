@@ -399,10 +399,30 @@ void TF_Inference::BatchInference(ImageType::Pointer inputImage, LabelImageType:
 
 	pool.shutdown();
 
+	// cast the label to and weight to float image
+	itk::CastImageFilter<LabelImageType, ImageType>::Pointer upcaster1 = itk::CastImageFilter<LabelImageType, ImageType>::New();
+	upcaster1->SetInput(outputLabel);
+	upcaster1->Update();
+
+	itk::CastImageFilter<LabelImageType, ImageType>::Pointer upcaster2 = itk::CastImageFilter<LabelImageType, ImageType>::New();
+	upcaster2->SetInput(weightImage);
+	upcaster2->Update();
+
 	// divide label by weight
-	itk::DivideImageFilter<LabelImageType, LabelImageType, LabelImageType>::Pointer divideFilter = itk::DivideImageFilter<LabelImageType, LabelImageType, LabelImageType>::New();
-	divideFilter->SetInput1(outputLabel);
-	divideFilter->SetInput2(weightImage);
+	itk::DivideImageFilter<ImageType, ImageType, ImageType>::Pointer divideFilter = itk::DivideImageFilter<ImageType, ImageType, ImageType>::New();
+	divideFilter->SetInput1(upcaster1->GetOutput());
+	divideFilter->SetInput2(upcaster2->GetOutput());
 	divideFilter->Update();
-	outputLabel->Graft(divideFilter->GetOutput());
+
+	// cast the output label back to short, add 0.5 to each pixel to avoid round down issue
+	itk::AddImageFilter<ImageType, ImageType>::Pointer addFilter = itk::AddImageFilter<ImageType, ImageType>::New();
+	addFilter->SetInput1(divideFilter->GetOutput());
+	addFilter->SetConstant2(0.5);
+	addFilter->Update();
+
+	itk::CastImageFilter<ImageType, LabelImageType>::Pointer downcaster = itk::CastImageFilter<ImageType, LabelImageType>::New();
+	downcaster->SetInput(addFilter->GetOutput());
+	downcaster->Update();
+
+	outputLabel->Graft(downcaster->GetOutput());
 }
