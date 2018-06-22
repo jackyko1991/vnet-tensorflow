@@ -16,11 +16,14 @@
 #include "tensorflow/core/public/session.h"
 #include "tensorflow/core/public/session_options.h"
 #include "tensorflow/core/protobuf/meta_graph.pb.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 
 #include <thread>
 #include <future>
 #include <mutex>
 #include "ThreadPool.h"
+#include <sstream>
+#include <iostream>
 
 typedef itk::Image<float, 3> ImageType;
 typedef itk::Image<short, 3> LabelImageType;

@@ -68,6 +68,31 @@ void TF_Inference::SetBufferPoolSize(unsigned int size)
 	m_bufferPoolSize = size;
 }
 
+void extractIntegerWords(std::string str, std::vector<int>& nums)
+{
+
+	std::stringstream ss;
+
+	/* Storing the whole string into string stream */
+	ss << str;
+
+	/* Running loop till the end of the stream */
+	std::string temp;
+	int found;
+	while (!ss.eof()) {
+
+		/* extracting word by word from stream */
+		ss >> temp;
+
+		/* Checking the given word is integer or not */
+		if (std::stringstream(temp) >> found)
+		{
+			nums.push_back(found);
+		}
+			
+	}
+}
+
 void TF_Inference::Inference()
 {
 	// load the graph proto file
@@ -85,6 +110,29 @@ void TF_Inference::Inference()
 	for (int i = 0; i < m_graphDef->node_size(); i++)
 	{
 		tensorflow::NodeDef n = m_graphDef->node(i);
+
+		std::string placholderStr = "images_placeholder";
+		if (n.name().find(placholderStr) != std::string::npos)
+		{
+			tensorflow::AttrValue value = n.attr().at("shape");
+			
+			//extract input shape of network, suppose to be work with 
+			//
+			//auto shape = graph_def.node().Get(0).attr().at("shape").shape();
+			//for (int i = 0; i < shape.dim_size(); i++) {
+			//	std::cout << shape.dim(i).size() << std::endl;
+			//}
+			//
+			// but tf c++ api seems not containing tensorshapeproto, use string to extract proper input size instead
+
+			std::vector<int> shape;
+			extractIntegerWords(value.DebugString(), shape);
+
+			// set patch size fit input placeholder
+			m_patchSize[0] = shape[1];
+			m_patchSize[1] = shape[2];
+			m_patchSize[2] = shape[3];
+		}
 
 		if (n.name().find("nWeights") != std::string::npos) {
 			vNames.push_back(n.name());
