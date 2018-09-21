@@ -66,7 +66,7 @@ All training, testing and evaluation data should put in `./data`
     
 If you wish to use image and label with filename other than `img.nii.gz` and `label.nii.gz`, please change the following values in `train.py`
 
-```
+```python
 image_filename = 'img.nii.gz'
 label_filename = 'label.nii.gz'
 ```
@@ -78,7 +78,7 @@ In segmentation tasks, image and label are always in pair, missing either one wo
 You may run train.py with commandline arguments. To check usage, type ```python train.py -h``` in terminal to list all possible training parameters.
 
 Available training parameters
-```
+```console
   --batch_size: Size of batch
     (default: '1')
     (an integer)
@@ -139,7 +139,7 @@ Here we introduce serveral data augmentation skills that allow users to normaliz
 5. Gaussian Noise
 
 The preprocessing pipeline can be easily adjustable with following example code in `train.py`:
-```
+```python
 trainTransforms = [
                 NiftiDataset.Normalization(),
                 NiftiDataset.Resample(0.4356),
@@ -153,7 +153,7 @@ To write you own preprocessing pipeline, you need to modify the preprocessing cl
 
 #### Tensorboard
 In training stage, result can be visualized via Tensorboard. Run the following command:
-```
+```console
 tensorboard --logdir=./tmp/log
 ```
 
