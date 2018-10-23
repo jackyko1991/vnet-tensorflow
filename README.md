@@ -49,13 +49,13 @@ All training, testing and evaluation data should put in `./data`
     |   |   ├── case2
     |   |   ├──...
     │   ├── training              # Put all training data here
-    |   |   ├── case1             # foldername for the cases is arbitar
+    |   |   ├── case1             # foldername for the cases is arbitary
     |   |   |   ├── img.nii.gz    # Image for testing
     |   |   |   └── label.nii.gz  # Corresponding label for testing
     |   |   ├── case2
     |   |   ├──...
     │   └── evaluation            # Put all evaluation data here
-    |   |   ├── case1             # foldername for the cases is arbitar
+    |   |   ├── case1             # foldername for the cases is arbitary
     |   |   |   └── img.nii.gz    # Image for evaluation
     |   |   ├── case2
     |   |   ├──...
