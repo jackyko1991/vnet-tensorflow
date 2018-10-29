@@ -128,7 +128,7 @@ Available training parameters
  ```
 
 #### Image batch preparation
-Typically medical image is large in size when comparing with natural images (height x widht x layers x modilty), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
+Typically medical image is large in size when comparing with natural images (height x widht x layers x modality), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
 
 Here we introduce serveral data augmentation skills that allow users to normalize and resample medical images in 3D sense. In `train.py`, you can access to `trainTransforms`/`testTransforms`. For general purpose we combine the advantage of tensorflow dataset api and SimpleITK (SITK) image processing toolkit together. Following is the preprocessing pipeline in SITK side to faciliate image augumentation with limited available memories.
 
@@ -138,7 +138,7 @@ Here we introduce serveral data augmentation skills that allow users to normaliz
 4. Random Crop (randomly select a zone in the 3D medical image in exact size as network input)
 5. Gaussian Noise
 
-The preprocessing pipeline can be easily adjustable with following example code in `train.py`:
+The preprocessing pipeline can easily be adjusted with following example code in `train.py`:
 ```python
 trainTransforms = [
                 NiftiDataset.Normalization(),
