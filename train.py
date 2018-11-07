@@ -17,15 +17,15 @@ tf.app.flags.DEFINE_string('data_dir', './data',
     """Directory of stored data.""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',256,
     """Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',128,
+tf.app.flags.DEFINE_integer('patch_layer',8,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.0001,
+tf.app.flags.DEFINE_float('init_learning_rate',0.000005,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
@@ -142,8 +142,10 @@ def train():
         train_data_dir = os.path.join(FLAGS.data_dir,'training')
         test_data_dir = os.path.join(FLAGS.data_dir,'testing')
         # support multiple image input, but here only use single channel, label file should be a single file with different classes
-        image_filename = 'image_windowed.nii'
-        label_filename = 'label.nii'
+        # image_filename = 'image_windowed.nii'
+        # label_filename = 'label.nii'
+        image_filename = 'img.nii.gz'
+        label_filename = 'label.nii.gz'
 
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):
@@ -243,6 +245,10 @@ def train():
                 logits=logits,
                 labels=tf.squeeze(labels_placeholder, 
                 squeeze_dims=[4])))
+            # loss_op = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(
+            #     logits=logits,
+            #     labels=tf.squeeze(labels_placeholder,squeeze_dims=[4]),
+            #     weights=[[]]))
         tf.summary.scalar('loss',loss_op)
 
         # Argmax Op to generate label from logits
@@ -286,7 +292,7 @@ def train():
         summary_op = tf.summary.merge_all()
         checkpoint_prefix = os.path.join(FLAGS.checkpoint_dir ,"checkpoint")
         print("Setting up Saver...")
-        saver = tf.train.Saver()
+        saver = tf.train.Saver(keep_checkpoint_every_n_hours=5)
 
         # training cycle
         with tf.Session() as sess:
