@@ -145,7 +145,6 @@ def train():
         # image_filename = 'image_windowed.nii'
         # label_filename = 'label.nii'
         image_filename = 'img.nii.gz'
-        label_filename = 'label.nii.gz'
 
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):
