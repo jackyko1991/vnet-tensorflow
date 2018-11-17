@@ -83,7 +83,7 @@ class NiftiDataset(object):
 
 class Normalization(object):
   """
-  Normalize an image by setting its mean to zero and variance to one
+  Normalize an image to 0 - 255
   """
 
   def __init__(self):
@@ -99,7 +99,32 @@ class Normalization(object):
     image, label = sample['image'], sample['label']
     image = resacleFilter.Execute(image)
 
-    return {'image':image, 'label':label}
+    return {'image': image, 'label': label}
+
+class StatisticalNormalization(object):
+  """
+  Normalize an image by mapping intensity with intensity distribution
+  """
+
+  def __init__(self, sigma):
+    self.name = 'StatisticalNormalization'
+    assert isinstance(sigma, float)
+    self.sigma = sigma
+
+  def __call__(self, sample):
+    image, label = sample['image'], sample['label']
+    statisticsFilter = sitk.StatisticsImageFilter()
+    statisticsFilter.Execute(image)
+
+    intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
+    intensityWindowingFilter.SetOutputMaximum(255)
+    intensityWindowingFilter.SetOutputMinimum(0)
+    intensityWindowingFilter.SetWindowMaximum(statisticsFilter.GetMean()+self.sigma*statisticsFilter.GetSigma());
+    intensityWindowingFilter.SetWindowMinimum(statisticsFilter.GetMean()-self.sigma*statisticsFilter.GetSigma());
+
+    image = intensityWindowingFilter.Execute(image)
+
+    return {'image': image, 'label': label}
 
 class Resample(object):
   """
