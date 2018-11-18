@@ -1,6 +1,6 @@
 data*/*
 __pycache__
-tmp
+tmp*
 cxx/build
 sftp-config.json
 =======

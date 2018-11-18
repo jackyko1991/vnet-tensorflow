@@ -13,13 +13,17 @@ import datetime
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data',
+tf.app.flags.DEFINE_string('data_dir', './data_promise-2012-separated-reduced',
     """Directory of stored data.""")
+tf.app.flags.DEFINE_integer('image_filename','image.mhd',
+    """Image filename""")
+tf.app.flags.DEFINE_integer('label_filename','segmentation.mhd',
+    """Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
 tf.app.flags.DEFINE_integer('patch_size',256,
     """Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',8,
+tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
@@ -142,16 +146,14 @@ def train():
         train_data_dir = os.path.join(FLAGS.data_dir,'training')
         test_data_dir = os.path.join(FLAGS.data_dir,'testing')
         # support multiple image input, but here only use single channel, label file should be a single file with different classes
-        # image_filename = 'image_windowed.nii'
-        # label_filename = 'label.nii'
-        image_filename = 'img.nii.gz'
 
         # Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
         with tf.device('/cpu:0'):
             # create transformations to image and labels
             trainTransforms = [
-                NiftiDataset.Normalization(),
-                NiftiDataset.Resample(0.2),
+                NiftiDataset.StatisticalNormalization(1.96),
+                # NiftiDataset.Normalization(),
+                NiftiDataset.Resample((0.25,0.25,2)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
                 NiftiDataset.RandomNoise()
@@ -159,8 +161,8 @@ def train():
 
             TrainDataset = NiftiDataset.NiftiDataset(
                 data_dir=train_data_dir,
-                image_filename=image_filename,
-                label_filename=label_filename,
+                image_filename=FLAGS.image_filename,
+                label_filename=FLAGS.label_filename,
                 transforms=trainTransforms,
                 train=True
                 )
@@ -170,16 +172,17 @@ def train():
             trainDataset = trainDataset.batch(FLAGS.batch_size)
 
             testTransforms = [
-                NiftiDataset.Normalization(),
-                NiftiDataset.Resample(0.2),
+                NiftiDataset.StatisticalNormalization(1.96),
+                # NiftiDataset.Normalization(),
+                NiftiDataset.Resample((0.25,0.25,2)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
                 ]
 
             TestDataset = NiftiDataset.NiftiDataset(
                 data_dir=train_data_dir,
-                image_filename=image_filename,
-                label_filename=label_filename,
+                image_filename=FLAGS.image_filename,
+                label_filename=FLAGS.label_filename,
                 transforms=testTransforms,
                 train=True
             )
@@ -196,7 +199,16 @@ def train():
 
         # Initialize the model
         with tf.name_scope("vnet"):
-            logits = VNet.v_net(images_placeholder,input_channels = input_batch_shape[4], output_channels =2)
+            model = VNet(
+                num_classes=2, # binary for 2
+                keep_prob=1.0, # default 1
+                num_channels=4, # default 16 
+                num_levels=4,  # default 4
+                num_convolutions=(1, 2, 3, 3), # default 1,2,3,3
+                bottom_convolutions=3, # default 3
+                activation_fn="prelu") # default relu
+
+            logits = model.network_fn(images_placeholder, is_training=True)
 
         # # apply weight to the logic funciton
         # if FLAGS.class_weight <0 or FLAGS.class_weight>1:
@@ -329,6 +341,7 @@ def train():
                         image = image[:,:,:,:,np.newaxis]
                         label = label[:,:,:,:,np.newaxis]
                         
+                        model.is_training = True;
                         train, summary = sess.run([train_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
                         train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 
@@ -352,6 +365,7 @@ def train():
                         image = image[:,:,:,:,np.newaxis]
                         label = label[:,:,:,:,np.newaxis]
                         
+                        model.is_training = False;
                         loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
                         test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 

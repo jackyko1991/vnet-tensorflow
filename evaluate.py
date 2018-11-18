@@ -14,11 +14,11 @@ from tqdm import tqdm
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-# tf.app.flags.DEFINE_string('data_dir','./data/evaluate',
-#     """Directory of evaluation data""")
-tf.app.flags.DEFINE_string('data_dir','./data/raw_data/nii/batch5',
+tf.app.flags.DEFINE_string('data_dir','./data/evaluate',
     """Directory of evaluation data""")
-tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-377335.meta',
+# tf.app.flags.DEFINE_string('data_dir','./data/raw_data/nii/batch5',
+#     """Directory of evaluation data""")
+tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-4256.meta',
     """Path to saved models""")
 tf.app.flags.DEFINE_string('checkpoint_dir','./tmp/ckpt',
     """Directory of saved checkpoints""")
@@ -55,8 +55,8 @@ def evaluate():
     
     # ops to load data
     # support multiple image input, but here only use single channel, label file should be a single file with different classes
-    # image_filename = 'img.nii.gz'
-    image_filename = 'image_windowed.nii'
+    image_filename = 'img.nii.gz'
+    # image_filename = 'image_windowed.nii'
 
     # create transformations to image and labels
     transforms = [
