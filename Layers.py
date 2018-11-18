@@ -1,19 +1,87 @@
+# MIT License
+#
+# Copyright (c) 2018 Miguel Monteiro
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import tensorflow as tf
+import numpy as np
 
 
-# n_activations_prev_layer = patch_volume_prev * in_channels
-# n_activations_current_layer = patch_volume * out_channels
-# sqrt(3/(n_activations_prev_layer + n_activations_current_layer)) (assuming prev_patch==curr_patch)
-def xavier_normal_dist_conv3d(shape):
-    return tf.truncated_normal(shape, mean=0,
-                               stddev=tf.sqrt(3. / (tf.reduce_prod(shape[:3]) * tf.reduce_sum(shape[3:]))))
+def xavier_initializer_convolution(shape, dist='uniform', lambda_initializer=True):
+    """
+    Xavier initializer for N-D convolution patches. input_activations = patch_volume * in_channels;
+    output_activations = patch_volume * out_channels; Uniform: lim = sqrt(3/(input_activations + output_activations))
+    Normal: stddev =  sqrt(6/(input_activations + output_activations))
+    :param shape: The shape of the convolution patch i.e. spatial_shape + [input_channels, output_channels]. The order of
+    input_channels and output_channels is irrelevant, hence this can be used to initialize deconvolution parameters.
+    :param dist: A string either 'uniform' or 'normal' determining the type of distribution
+    :param lambda_initializer: Whether to return the initial actual values of the parameters (True) or placeholders that
+    are initialized when the session is initiated
+    :return: A numpy araray with the initial values for the parameters in the patch
+    """
+    s = len(shape) - 2
+    num_activations = np.prod(shape[:s]) * np.sum(shape[s:])  # input_activations + output_activations
+    if dist == 'uniform':
+        lim = np.sqrt(6. / num_activations)
+        if lambda_initializer:
+            return np.random.uniform(-lim, lim, shape).astype(np.float32)
+        else:
+            return tf.random_uniform(shape, minval=-lim, maxval=lim)
+    if dist == 'normal':
+        stddev = np.sqrt(3. / num_activations)
+        if lambda_initializer:
+            return np.random.normal(0, stddev, shape).astype(np.float32)
+        else:
+            tf.truncated_normal(shape, mean=0, stddev=stddev)
+    raise ValueError('Distribution must be either "uniform" or "normal".')
 
 
-def xavier_uniform_dist_conv3d(shape):
-    with tf.variable_scope('xavier_glorot_initializer'):
-        denominator = tf.cast((tf.reduce_prod(shape[:3]) * tf.reduce_sum(shape[3:])), tf.float32)
-        lim = tf.sqrt(6. / denominator)
-        return tf.random_uniform(shape, minval=-lim, maxval=lim)
+def constant_initializer(value, shape, lambda_initializer=True):
+    if lambda_initializer:
+        return np.full(shape, value).astype(np.float32)
+    else:
+        return tf.constant(value, tf.float32, shape)
+
+
+def get_spatial_rank(x):
+    """
+    :param x: an input tensor with shape [batch_size, ..., num_channels]
+    :return: the spatial rank of the tensor i.e. the number of spatial dimensions between batch_size and num_channels
+    """
+    return len(x.get_shape()) - 2
+
+
+def get_num_channels(x):
+    """
+    :param x: an input tensor with shape [batch_size, ..., num_channels]
+    :return: the number of channels of x
+    """
+    return int(x.get_shape()[-1])
+
+
+def get_spatial_size(x):
+    """
+    :param x: an input tensor with shape [batch_size, ..., num_channels]
+    :return: The spatial shape of x, excluding batch_size and num_channels.
+    """
+    return x.get_shape()[1:-1]
 
 
 # parametric leaky relu
@@ -22,33 +90,42 @@ def prelu(x):
     return tf.maximum(0.0, x) + alpha * tf.minimum(0.0, x)
 
 
-def convolution_3d(layer_input, filter, strides, padding='SAME'):
-    assert len(filter) == 5  # [filter_depth, filter_height, filter_width, in_channels, out_channels]
-    assert len(strides) == 5  # must match input dimensions [batch, in_depth, in_height, in_width, in_channels]
-    assert padding in ['VALID', 'SAME']
+def convolution(x, filter, padding='SAME', strides=None, dilation_rate=None):
+    w = tf.get_variable(name='weights', initializer=xavier_initializer_convolution(shape=filter))
+    b = tf.get_variable(name='biases', initializer=constant_initializer(0, shape=filter[-1]))
 
-    w = tf.Variable(initial_value=xavier_uniform_dist_conv3d(shape=filter), name='weights')
-    b = tf.Variable(tf.constant(1.0, shape=[filter[-1]]), name='biases')
-
-    return tf.nn.conv3d(layer_input, w, strides, padding) + b
+    return tf.nn.convolution(x, w, padding, strides, dilation_rate) + b
 
 
-def deconvolution_3d(layer_input, filter, output_shape, strides, padding='SAME'):
-    assert len(filter) == 5  # [depth, height, width, output_channels, in_channels]
-    assert len(strides) == 5  # must match input dimensions [batch, depth, height, width, in_channels]
-    assert padding in ['VALID', 'SAME']
+def deconvolution(x, filter, output_shape, strides, padding='SAME'):
+    w = tf.get_variable(name='weights', initializer=xavier_initializer_convolution(shape=filter))
+    b = tf.get_variable(name='biases', initializer=constant_initializer(0, shape=filter[-2]))
 
-    w = tf.Variable(initial_value=xavier_uniform_dist_conv3d(shape=filter), name='weights')
-    b = tf.Variable(tf.constant(1.0, shape=[filter[-2]]), name='biases')
+    spatial_rank = get_spatial_rank(x)
+    if spatial_rank == 2:
+        return tf.nn.conv2d_transpose(x, filter, output_shape, strides, padding) + b
+    if spatial_rank == 3:
+        return tf.nn.conv3d_transpose(x, w, output_shape, strides, padding) + b
+    raise ValueError('Only 2D and 3D images supported.')
 
-    return tf.nn.conv3d_transpose(layer_input, w, output_shape, strides, padding) + b
+
+# More complex blocks
+
+# down convolution
+def down_convolution(x, factor, kernel_size):
+    num_channels = get_num_channels(x)
+    spatial_rank = get_spatial_rank(x)
+    strides = spatial_rank * [factor]
+    filter = kernel_size + [num_channels, num_channels * factor]
+    x = convolution(x, filter, strides=strides)
+    return x
 
 
-def max_pooling_3d(layer_input, ksize, strides, padding='SAME'):
-    assert len(ksize) == 5  # [batch, depth, rows, cols, channels]
-    assert len(strides) == 5  # [batch, depth, rows, cols, channels]
-    assert ksize[0] == ksize[4]
-    assert ksize[0] == 1
-    assert strides[0] == strides[4]
-    assert strides[0] == 1
-    return tf.nn.max_pool3d(layer_input, ksize, strides, padding)
+# up convolution
+def up_convolution(x, output_shape, factor, kernel_size):
+    num_channels = get_num_channels(x)
+    spatial_rank = get_spatial_rank(x)
+    strides = [1] + spatial_rank * [factor] + [1]
+    filter = kernel_size + [num_channels // factor, num_channels]
+    x = deconvolution(x, filter, output_shape, strides=strides)
+    return x

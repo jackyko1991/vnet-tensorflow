@@ -91,9 +91,10 @@ class VNet(object):
         self.num_levels = num_levels
         self.num_convolutions = num_convolutions
         self.bottom_convolutions = bottom_convolutions
+
         if (activation_fn == "relu"):
             self.activation_fn = tf.nn.relu
-        else if(activation_fn == "relu"):
+        elif(activation_fn == "prelu"):
             self.activation_fn = prelu
 
     def network_fn(self, x, is_training):

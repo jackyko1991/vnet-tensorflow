@@ -13,11 +13,11 @@ import datetime
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_promise-2012-separated-reduced',
+tf.app.flags.DEFINE_string('data_dir', './data_demo',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_integer('image_filename','image.mhd',
+tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
     """Image filename""")
-tf.app.flags.DEFINE_integer('label_filename','segmentation.mhd',
+tf.app.flags.DEFINE_string('label_filename','segmentation.nii.gz',
     """Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
@@ -27,9 +27,9 @@ tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
-tf.app.flags.DEFINE_string('log_dir', './tmp/log',
+tf.app.flags.DEFINE_string('log_dir', './tmp_demo/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.000005,
+tf.app.flags.DEFINE_float('init_learning_rate',0.00005,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
@@ -39,9 +39,9 @@ tf.app.flags.DEFINE_integer('display_step',10,
     """Display and logging interval (train steps)""")
 tf.app.flags.DEFINE_integer('save_interval',1,
     """Checkpoint save interval (epochs)""")
-tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
+tf.app.flags.DEFINE_string('checkpoint_dir', './tmp_demo/ckpt',
     """Directory where to write checkpoint""")
-tf.app.flags.DEFINE_string('model_dir','./tmp/model',
+tf.app.flags.DEFINE_string('model_dir','./tmp_demo/model',
     """Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
     """Restore training from last checkpoint""")
@@ -156,7 +156,7 @@ def train():
                 NiftiDataset.Resample((0.25,0.25,2)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
-                NiftiDataset.RandomNoise()
+                # NiftiDataset.RandomNoise()
                 ]
 
             TrainDataset = NiftiDataset.NiftiDataset(
@@ -199,12 +199,12 @@ def train():
 
         # Initialize the model
         with tf.name_scope("vnet"):
-            model = VNet(
+            model = VNet.VNet(
                 num_classes=2, # binary for 2
                 keep_prob=1.0, # default 1
-                num_channels=4, # default 16 
+                num_channels=16, # default 16 
                 num_levels=4,  # default 4
-                num_convolutions=(1, 2, 3, 3), # default 1,2,3,3
+                num_convolutions=(1,2,3,3), # default (1,2,3,3), size should equal to num_levels
                 bottom_convolutions=3, # default 3
                 activation_fn="prelu") # default relu
 
@@ -222,8 +222,16 @@ def train():
         #     weighted_logits = logits
 
         for batch in range(FLAGS.batch_size):
-            logits_log_0 = tf.cast(logits[batch:batch+1,:,:,:,0], dtype=tf.uint8)
-            logits_log_1 = tf.cast(logits[batch:batch+1,:,:,:,1], dtype=tf.uint8)
+            logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
+            logits_min = tf.reduce_min(logits[batch:batch+1,:,:,:,:])
+
+            logits_log_0 = logits[batch:batch+1,:,:,:,0]
+            logits_log_1 = logits[batch:batch+1,:,:,:,1]
+
+            # normalize to 0-255 range
+            logits_log_0 = tf.cast(logits_log_0*255./(logits_max-logits_min), dtype=tf.uint8)
+            logits_log_1 = tf.cast(logits_log_1*255./(logits_max-logits_min), dtype=tf.uint8)
+
             tf.summary.image("logits_0", tf.transpose(logits_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
             tf.summary.image("logits_1", tf.transpose(logits_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 
@@ -256,11 +264,29 @@ def train():
                 logits=logits,
                 labels=tf.squeeze(labels_placeholder, 
                 squeeze_dims=[4])))
-            # loss_op = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(
-            #     logits=logits,
-            #     labels=tf.squeeze(labels_placeholder,squeeze_dims=[4]),
-            #     weights=[[]]))
         tf.summary.scalar('loss',loss_op)
+
+        with tf.name_scope("weighted_cross_entropy"):
+            # currently only support one batch and binary segmentation
+            bincount = tf.bincount(labels_placeholder);
+            bincount_ratio = tf.reduce_sum(bincount)/bincount
+            bincount_ratio = bincount_ratio/tf.reduce_sum(bincount_ratio) # this is just for examining class ratio, not use for training
+            weights = tf.constant([0.1, 1.0])
+                
+            weight_0 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[0],tf.float32)
+            weight_1 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[1],tf.float32)
+            weight_matrix = tf.concat([weight_0, weight_1],-1)
+
+            # weighted logits
+            weighted_logits = tf.multiply(weight_matrix,logits)
+
+            #weighted loss
+            weighted_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+                logits=weighted_logits,
+                labels=tf.squeeze(labels_placeholder, 
+                squeeze_dims=[4])))
+        tf.summary.scalar('bincount_ratio',bincount_ratio[0]/bincount_ratio[1])
+        tf.summary.scalar('weighted_loss',weighted_loss_op)
 
         # Argmax Op to generate label from logits
         with tf.name_scope("predicted_label"):
@@ -289,10 +315,9 @@ def train():
 
         # Training Op
         with tf.name_scope("training"):
-            # optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
             optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
             train_op = optimizer.minimize(
-                loss=loss_op,
+                loss=weighted_loss_op,
                 global_step=global_step)
 
         # # epoch checkpoint manipulation
@@ -305,8 +330,12 @@ def train():
         print("Setting up Saver...")
         saver = tf.train.Saver(keep_checkpoint_every_n_hours=5)
 
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        # config.gpu_options.per_process_gpu_memory_fraction = 0.4
+
         # training cycle
-        with tf.Session() as sess:
+        with tf.Session(config=config) as sess:
             # Initialize all variables
             sess.run(tf.global_variables_initializer())
             print("{}: Start training...".format(datetime.datetime.now()))
@@ -350,6 +379,8 @@ def train():
                         # print(start_epoch.eval())
                         # save the model at end of each epoch training
                         print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,FLAGS.checkpoint_dir))
+                        if not (os.path.exists(FLAGS.checkpoint_dir)):
+                            os.mkdir(FLAGS.checkpoint_dir)
                         saver.save(sess, checkpoint_prefix, 
                             global_step=tf.train.global_step(sess, global_step),
                             latest_filename="checkpoint-latest")
