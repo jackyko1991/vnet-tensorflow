@@ -13,11 +13,11 @@ import datetime
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_demo',
+tf.app.flags.DEFINE_string('data_dir', './data_promise-2012-separated-reduced',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
+tf.app.flags.DEFINE_string('image_filename','image.mhd',
     """Image filename""")
-tf.app.flags.DEFINE_string('label_filename','segmentation.nii.gz',
+tf.app.flags.DEFINE_string('label_filename','segmentation.mhd',
     """Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
@@ -27,9 +27,9 @@ tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
-tf.app.flags.DEFINE_string('log_dir', './tmp_demo/log',
+tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.00005,
+tf.app.flags.DEFINE_float('init_learning_rate',0.00000005,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
@@ -39,9 +39,9 @@ tf.app.flags.DEFINE_integer('display_step',10,
     """Display and logging interval (train steps)""")
 tf.app.flags.DEFINE_integer('save_interval',1,
     """Checkpoint save interval (epochs)""")
-tf.app.flags.DEFINE_string('checkpoint_dir', './tmp_demo/ckpt',
+tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
     """Directory where to write checkpoint""")
-tf.app.flags.DEFINE_string('model_dir','./tmp_demo/model',
+tf.app.flags.DEFINE_string('model_dir','./tmp/model',
     """Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
     """Restore training from last checkpoint""")
@@ -156,7 +156,7 @@ def train():
                 NiftiDataset.Resample((0.25,0.25,2)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
-                # NiftiDataset.RandomNoise()
+                NiftiDataset.RandomNoise()
                 ]
 
             TrainDataset = NiftiDataset.NiftiDataset(
@@ -229,8 +229,8 @@ def train():
             logits_log_1 = logits[batch:batch+1,:,:,:,1]
 
             # normalize to 0-255 range
-            logits_log_0 = tf.cast(logits_log_0*255./(logits_max-logits_min), dtype=tf.uint8)
-            logits_log_1 = tf.cast(logits_log_1*255./(logits_max-logits_min), dtype=tf.uint8)
+            logits_log_0 = tf.cast((logits_log_0-logits_min)*255./(logits_max-logits_min), dtype=tf.uint8)
+            logits_log_1 = tf.cast((logits_log_1-logits_min)*255./(logits_max-logits_min), dtype=tf.uint8)
 
             tf.summary.image("logits_0", tf.transpose(logits_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
             tf.summary.image("logits_1", tf.transpose(logits_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
@@ -271,7 +271,7 @@ def train():
             bincount = tf.bincount(labels_placeholder);
             bincount_ratio = tf.reduce_sum(bincount)/bincount
             bincount_ratio = bincount_ratio/tf.reduce_sum(bincount_ratio) # this is just for examining class ratio, not use for training
-            weights = tf.constant([0.1, 1.0])
+            weights = tf.constant([0.07, 1.0])
                 
             weight_0 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[0],tf.float32)
             weight_1 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[1],tf.float32)
@@ -316,8 +316,10 @@ def train():
         # Training Op
         with tf.name_scope("training"):
             optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
+
             train_op = optimizer.minimize(
                 loss=weighted_loss_op,
+                # loss=loss_op,
                 global_step=global_step)
 
         # # epoch checkpoint manipulation
