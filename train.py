@@ -271,20 +271,34 @@ def train():
             bincount = tf.bincount(labels_placeholder);
             bincount_ratio = tf.reduce_sum(bincount)/bincount
             bincount_ratio = bincount_ratio/tf.reduce_sum(bincount_ratio) # this is just for examining class ratio, not use for training
-            weights = tf.constant([0.07, 1.0])
-                
-            weight_0 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[0],tf.float32)
-            weight_1 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[1],tf.float32)
-            weight_matrix = tf.concat([weight_0, weight_1],-1)
+            class_weights = tf.constant([0.07, 1.0])
 
-            # weighted logits
-            weighted_logits = tf.multiply(weight_matrix,logits)
+            # deduce weights for batch samples based on their true label
+            onehot_labels = tf.one_hot(tf.squeeze(labels_placeholder,squeeze_dims=[4]),depth = 2)
 
-            #weighted loss
-            weighted_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits=weighted_logits,
+            weights = tf.reduce_sum(class_weights * onehot_labels, axis=-1)
+            # compute your (unweighted) softmax cross entropy loss
+            unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                logits=logits,
                 labels=tf.squeeze(labels_placeholder, 
-                squeeze_dims=[4])))
+                squeeze_dims=[4]))
+            # apply the weights, relying on broadcasting of the multiplication
+            weighted_loss = unweighted_loss * weights
+            # reduce the result to get your final loss
+            weighted_loss_op = tf.reduce_mean(weighted_loss)
+                
+            # weight_0 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[0],tf.float32)
+            # weight_1 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[1],tf.float32)
+            # weight_matrix = tf.concat([weight_0, weight_1],-1)
+
+            # # weighted logits
+            # weighted_logits = tf.multiply(weight_matrix,logits)
+
+            # #weighted loss
+            # weighted_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+            #     logits=weighted_logits,
+            #     labels=tf.squeeze(labels_placeholder, 
+            #     squeeze_dims=[4])))
         tf.summary.scalar('bincount_ratio',bincount_ratio[0]/bincount_ratio[1])
         tf.summary.scalar('weighted_loss',weighted_loss_op)
 
