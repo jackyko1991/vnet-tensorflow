@@ -332,8 +332,8 @@ def train():
             optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
 
             train_op = optimizer.minimize(
-                loss=weighted_loss_op,
-                # loss=loss_op,
+                # loss=weighted_loss_op,
+                loss=loss_op,
                 global_step=global_step)
 
         # # epoch checkpoint manipulation
