@@ -13,11 +13,17 @@ import datetime
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_promise-2012-separated-reduced',
+# tf.app.flags.DEFINE_string('data_dir', './data_promise_2012_separated',
+#     """Directory of stored data.""")
+# tf.app.flags.DEFINE_string('image_filename','image.mhd',
+#     """Image filename""")
+# tf.app.flags.DEFINE_string('label_filename','segmentation.mhd',
+#     """Image filename""")
+tf.app.flags.DEFINE_string('data_dir', './data_sphere',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','image.mhd',
+tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
     """Image filename""")
-tf.app.flags.DEFINE_string('label_filename','segmentation.mhd',
+tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
     """Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
@@ -29,7 +35,7 @@ tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.00000005,
+tf.app.flags.DEFINE_float('init_learning_rate',0.005,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
@@ -104,6 +110,7 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
     - `Wiki-Dice <https://en.wikipedia.org/wiki/Sørensen–Dice_coefficient>`__
 
     """
+
     inse = tf.reduce_sum(output * target, axis=axis)
 
     if loss_type == 'jaccard':
@@ -113,7 +120,7 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
         l = tf.reduce_sum(output, axis=axis)
         r = tf.reduce_sum(target, axis=axis)
     else:
-        raise Exception("Unknow loss_type")
+        raise Exception("Unknown loss_type")
     ## old axis=[0,1,2,3]
     # dice = 2 * (inse) / (l + r)
     # epsilon = 1e-5
@@ -267,11 +274,11 @@ def train():
         tf.summary.scalar('loss',loss_op)
 
         with tf.name_scope("weighted_cross_entropy"):
-            # currently only support one batch and binary segmentation
-            bincount = tf.bincount(labels_placeholder);
-            bincount_ratio = tf.reduce_sum(bincount)/bincount
-            bincount_ratio = bincount_ratio/tf.reduce_sum(bincount_ratio) # this is just for examining class ratio, not use for training
-            class_weights = tf.constant([0.07, 1.0])
+            # # currently only support one batch and binary segmentation
+            # bincount = tf.bincount(labels_placeholder);
+            # bincount_ratio = tf.reduce_sum(bincount)/bincount
+            # bincount_ratio = bincount_ratio/tf.reduce_sum(bincount_ratio) # this is just for examining class ratio, not use for training
+            class_weights = tf.constant([1.0, 1.0])
 
             # deduce weights for batch samples based on their true label
             onehot_labels = tf.one_hot(tf.squeeze(labels_placeholder,squeeze_dims=[4]),depth = 2)
@@ -299,7 +306,7 @@ def train():
             #     logits=weighted_logits,
             #     labels=tf.squeeze(labels_placeholder, 
             #     squeeze_dims=[4])))
-        tf.summary.scalar('bincount_ratio',bincount_ratio[0]/bincount_ratio[1])
+        # tf.summary.scalar('bincount_ratio',bincount_ratio[0]/bincount_ratio[1])
         tf.summary.scalar('weighted_loss',weighted_loss_op)
 
         # Argmax Op to generate label from logits
@@ -316,10 +323,12 @@ def train():
             accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
         tf.summary.scalar('accuracy', accuracy)
 
-        # Dice Similarity
+        # Dice Similarity, currently only for binary segmentatoni
         with tf.name_scope("dice"):
-            sorensen = dice_coe(tf.expand_dims(pred,-1),tf.cast(labels_placeholder,dtype=tf.int64), loss_type='sorensen')
-            jaccard = dice_coe(tf.expand_dims(pred,-1),tf.cast(labels_placeholder,dtype=tf.int64), loss_type='jaccard')
+            # sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
+            # jaccard = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='jaccard')
+            sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen')
+            jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard')
             sorensen_loss = 1. - sorensen
             jaccard_loss = 1. - jaccard
         tf.summary.scalar('sorensen', sorensen)
@@ -333,7 +342,8 @@ def train():
 
             train_op = optimizer.minimize(
                 # loss=weighted_loss_op,
-                loss=loss_op,
+                # loss=loss_op,
+                loss = sorensen_loss,
                 global_step=global_step)
 
         # # epoch checkpoint manipulation
@@ -396,7 +406,7 @@ def train():
                         # save the model at end of each epoch training
                         print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,FLAGS.checkpoint_dir))
                         if not (os.path.exists(FLAGS.checkpoint_dir)):
-                            os.mkdir(FLAGS.checkpoint_dir)
+                            os.makedirs(FLAGS.checkpoint_dir,exist_ok=True)
                         saver.save(sess, checkpoint_prefix, 
                             global_step=tf.train.global_step(sess, global_step),
                             latest_filename="checkpoint-latest")
