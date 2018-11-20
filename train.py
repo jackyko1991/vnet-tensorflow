@@ -57,6 +57,8 @@ tf.app.flags.DEFINE_integer('min_pixel',10,
     """Minimum non-zero pixels in the cropped label""")
 tf.app.flags.DEFINE_integer('shuffle_buffer_size',5,
     """Number of elements used in shuffle buffer""")
+tf.app.flags.DEFINE_string('loss_function','sorensen',
+    """Loss function used in optimization""")
 # tf.app.flags.DEFINE_float('class_weight',0.15,
 #     """The weight used for imbalanced classes data. Currently only apply on binary segmentation class (weight for 0th class, (1-weight) for 1st class)""")
 
@@ -217,17 +219,6 @@ def train():
 
             logits = model.network_fn(images_placeholder, is_training=True)
 
-        # # apply weight to the logic funciton
-        # if FLAGS.class_weight <0 or FLAGS.class_weight>1:
-        #     print("Class weight should between 0 and 1")
-        #     exit()
-
-        # if logits.shape[4] == 2:
-        #     class_weight = tf.constant([FLAGS.class_weight,1.0-FLAGS.class_weight]) 
-        #     weighted_logits = tf.multiply(logits,class_weight)
-        # else:
-        #     weighted_logits = logits
-
         for batch in range(FLAGS.batch_size):
             logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
             logits_min = tf.reduce_min(logits[batch:batch+1,:,:,:,:])
@@ -274,10 +265,6 @@ def train():
         tf.summary.scalar('loss',loss_op)
 
         with tf.name_scope("weighted_cross_entropy"):
-            # # currently only support one batch and binary segmentation
-            # bincount = tf.bincount(labels_placeholder);
-            # bincount_ratio = tf.reduce_sum(bincount)/bincount
-            # bincount_ratio = bincount_ratio/tf.reduce_sum(bincount_ratio) # this is just for examining class ratio, not use for training
             class_weights = tf.constant([1.0, 1.0])
 
             # deduce weights for batch samples based on their true label
@@ -294,19 +281,6 @@ def train():
             # reduce the result to get your final loss
             weighted_loss_op = tf.reduce_mean(weighted_loss)
                 
-            # weight_0 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[0],tf.float32)
-            # weight_1 = tf.ones(labels_placeholder.get_shape())*tf.cast(weights[1],tf.float32)
-            # weight_matrix = tf.concat([weight_0, weight_1],-1)
-
-            # # weighted logits
-            # weighted_logits = tf.multiply(weight_matrix,logits)
-
-            # #weighted loss
-            # weighted_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-            #     logits=weighted_logits,
-            #     labels=tf.squeeze(labels_placeholder, 
-            #     squeeze_dims=[4])))
-        # tf.summary.scalar('bincount_ratio',bincount_ratio[0]/bincount_ratio[1])
         tf.summary.scalar('weighted_loss',weighted_loss_op)
 
         # Argmax Op to generate label from logits
@@ -340,10 +314,17 @@ def train():
         with tf.name_scope("training"):
             optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
 
+            if (FLAGS.loss_function == "xent"):
+                loss_fn = loss_op
+            elif(FLAGS.loss_function == "weight_xent"):
+                loss_fn = weighted_loss_op
+            elif(FLAGS.loss_function == "sorensen"):
+                loss_fn = sorensen_loss
+            elif(FLAGS.loss_function == "jaccard"):
+                loss_fn = jaccard_loss
+
             train_op = optimizer.minimize(
-                # loss=weighted_loss_op,
-                # loss=loss_op,
-                loss = sorensen_loss,
+                loss = loss_fn,
                 global_step=global_step)
 
         # # epoch checkpoint manipulation
