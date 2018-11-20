@@ -1,4 +1,5 @@
-data*/*
+data
+data_brain
 __pycache__
 tmp*
 cxx/build
