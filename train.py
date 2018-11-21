@@ -10,15 +10,12 @@ import VNet
 import math
 import datetime
 
+# select gpu devices
+os.environ["CUDA_VISIBLE_DEVICES"] = "1" # e.g. "0,1,2", "0,2" 
+
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-# tf.app.flags.DEFINE_string('data_dir', './data_promise_2012_separated',
-#     """Directory of stored data.""")
-# tf.app.flags.DEFINE_string('image_filename','image.mhd',
-#     """Image filename""")
-# tf.app.flags.DEFINE_string('label_filename','segmentation.mhd',
-#     """Image filename""")
 tf.app.flags.DEFINE_string('data_dir', './data_sphere',
     """Directory of stored data.""")
 tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
@@ -33,9 +30,9 @@ tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
-tf.app.flags.DEFINE_string('log_dir', './tmp/log',
+tf.app.flags.DEFINE_string('log_dir', './tmp_momentum/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.005,
+tf.app.flags.DEFINE_float('init_learning_rate',0.00000003,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
@@ -45,20 +42,26 @@ tf.app.flags.DEFINE_integer('display_step',10,
     """Display and logging interval (train steps)""")
 tf.app.flags.DEFINE_integer('save_interval',1,
     """Checkpoint save interval (epochs)""")
-tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
+tf.app.flags.DEFINE_string('checkpoint_dir', './tmp_momentum/ckpt',
     """Directory where to write checkpoint""")
-tf.app.flags.DEFINE_string('model_dir','./tmp/model',
+tf.app.flags.DEFINE_string('model_dir','./tmp_momentum/model',
     """Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
     """Restore training from last checkpoint""")
 tf.app.flags.DEFINE_float('drop_ratio',0,
     """Probability to drop a cropped area if the label is empty. All empty patches will be dropped for 0 and accept all cropped patches if set to 1""")
-tf.app.flags.DEFINE_integer('min_pixel',10,
+tf.app.flags.DEFINE_integer('min_pixel',500,
     """Minimum non-zero pixels in the cropped label""")
 tf.app.flags.DEFINE_integer('shuffle_buffer_size',5,
     """Number of elements used in shuffle buffer""")
 tf.app.flags.DEFINE_string('loss_function','sorensen',
-    """Loss function used in optimization""")
+    """Loss function used in optimization (xent, weight_xent, sorensen, jaccard)""")
+tf.app.flags.DEFINE_string('optimizer','sgd',
+    """Optimization method (sgd, adam, momentum, nesterov_momentum)""")
+tf.app.flags.DEFINE_float('momentum',0.5,
+    """Momentum used in optimization""")
+
+
 # tf.app.flags.DEFINE_float('class_weight',0.15,
 #     """The weight used for imbalanced classes data. Currently only apply on binary segmentation class (weight for 0th class, (1-weight) for 1st class)""")
 
@@ -82,7 +85,7 @@ def placeholder_inputs(input_batch_shape, output_batch_shape):
    
     return images_placeholder, labels_placeholder
 
-def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
+def dice_coe(output, target, loss_type='jaccard', axis=[1, 2, 3], smooth=1e-5):
     """Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
     of two batch of data, usually be used for binary image segmentation
     i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
@@ -113,11 +116,11 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
 
     """
 
-    inse = tf.reduce_sum(output * target, axis=axis)
+    inse = tf.reduce_sum(tf.multiply(output,target), axis=axis)
 
     if loss_type == 'jaccard':
-        l = tf.reduce_sum(output * output, axis=axis)
-        r = tf.reduce_sum(target * target, axis=axis)
+        l = tf.reduce_sum(tf.multiply(output,output), axis=axis)
+        r = tf.reduce_sum(tf.multiply(target,target), axis=axis)
     elif loss_type == 'sorensen':
         l = tf.reduce_sum(output, axis=axis)
         r = tf.reduce_sum(target, axis=axis)
@@ -160,7 +163,7 @@ def train():
         with tf.device('/cpu:0'):
             # create transformations to image and labels
             trainTransforms = [
-                NiftiDataset.StatisticalNormalization(1.96),
+                NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
                 NiftiDataset.Resample((0.25,0.25,2)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
@@ -181,7 +184,7 @@ def train():
             trainDataset = trainDataset.batch(FLAGS.batch_size)
 
             testTransforms = [
-                NiftiDataset.StatisticalNormalization(1.96),
+                NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
                 NiftiDataset.Resample((0.25,0.25,2)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
@@ -297,12 +300,12 @@ def train():
             accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
         tf.summary.scalar('accuracy', accuracy)
 
-        # Dice Similarity, currently only for binary segmentatoni
+        # Dice Similarity, currently only for binary segmentation
         with tf.name_scope("dice"):
             # sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
             # jaccard = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='jaccard')
-            sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen')
-            jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard')
+            sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3,4])
+            jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard', axis=[1,2,3,4])
             sorensen_loss = 1. - sorensen
             jaccard_loss = 1. - jaccard
         tf.summary.scalar('sorensen', sorensen)
@@ -312,8 +315,19 @@ def train():
 
         # Training Op
         with tf.name_scope("training"):
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
+            # optimizer
+            if FLAGS.optimizer == "sgd":
+                optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.init_learning_rate)
+            elif FLAGS.optimizer == "adam":
+                optimizer = tf.train.AdamOptimizer(learning_rate=FLAGS.init_learning_rate)
+            elif FLAGS.optimizer == "momentum":
+                optimizer = tf.train.MomentumOptimizer(learning_rate=FLAGS.init_learning_rate, momentum=FLAGS.momentum)
+            elif FLAGS.optimizer == "nesterov_momentum":
+                optimizer = tf.train.MomentumOptimizer(learning_rate=FLAGS.init_learning_rate, momentum=FLAGS.momentum, use_nesterov=True)
+            else:
+                sys.exit("Invalid optimizer");
 
+            # loss function
             if (FLAGS.loss_function == "xent"):
                 loss_fn = loss_op
             elif(FLAGS.loss_function == "weight_xent"):
@@ -322,6 +336,8 @@ def train():
                 loss_fn = sorensen_loss
             elif(FLAGS.loss_function == "jaccard"):
                 loss_fn = jaccard_loss
+            else:
+                sys.exit("Invalid loss function");
 
             train_op = optimizer.minimize(
                 loss = loss_fn,
