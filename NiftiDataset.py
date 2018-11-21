@@ -55,10 +55,17 @@ class NiftiDataset(object):
   def input_parser(self,image_path, label_path):
     # read image and label
     image = self.read_image(image_path.decode("utf-8"))
+     # cast image and label
+    castImageFilter = sitk.CastImageFilter()
+    castImageFilter.SetOutputPixelType(sitk.sitkInt16)
+    image = castImageFilter.Execute(image)
+
     if self.train:
       label = self.read_image(label_path.decode("utf-8"))
+      castImageFilter.SetOutputPixelType(sitk.sitkInt8)
+      label = castImageFilter.Execute(label)
     else:
-      label = sitk.Image(image.GetSize(),sitk.sitkUInt32)
+      label = sitk.Image(image.GetSize(),sitk.sitkInt8)
       label.SetOrigin(image.GetOrigin())
       label.SetSpacing(image.GetSpacing())
 
