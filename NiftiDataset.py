@@ -168,7 +168,7 @@ class Resample(object):
     new_size = tuple(new_size)
 
     resampler = sitk.ResampleImageFilter()
-    resampler.SetInterpolator(sitk.sitkBSpline)
+    resampler.SetInterpolator(2)
     resampler.SetOutputSpacing(new_spacing)
     resampler.SetSize(new_size)
 
@@ -229,7 +229,7 @@ class Padding(object):
       resampler.SetSize(self.output_size)
 
       # resample on image
-      resampler.SetInterpolator(sitk.sitkBSpline)
+      resampler.SetInterpolator(2)
       resampler.SetOutputOrigin(image.GetOrigin())
       resampler.SetOutputDirection(image.GetDirection())
       image = resampler.Execute(image)
