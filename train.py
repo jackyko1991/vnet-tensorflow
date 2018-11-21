@@ -34,6 +34,8 @@ tf.app.flags.DEFINE_string('log_dir', './tmp_momentum/log',
     """Directory where to write training and testing event logs """)
 tf.app.flags.DEFINE_float('init_learning_rate',0.00000003,
     """Initial learning rate""")
+# tf.app.flags.DEFINE_float('init_learning_rate',0.000003,
+#     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
 tf.app.flags.DEFINE_integer('decay_steps',100,
@@ -254,10 +256,32 @@ def train():
             softmax_op = tf.nn.softmax(logits,name="softmax")
 
         for batch in range(FLAGS.batch_size):
-            softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
-            softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,1]), dtype=tf.uint8)
-            tf.summary.image("softmax_0", tf.transpose(softmax_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
-            tf.summary.image("softmax_1", tf.transpose(softmax_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+            # grayscale to rainbow colormap, convert to HSV (H = reversed grayscale from 0:2/3, S and V are all 1)
+            # then convert to RGB
+            softmax_log_0H = (1. - tf.transpose(softmax_op[batch:batch+1,:,:,:,0],[3,1,2,0]))*2./3.
+            softmax_log_1H = (1. - tf.transpose(softmax_op[batch:batch+1,:,:,:,1],[3,1,2,0]))*2./3.
+
+            softmax_log_0H = tf.squeeze(softmax_log_0H,axis=-1)
+            softmax_log_1H = tf.squeeze(softmax_log_1H,axis=-1)
+            softmax_log_SV = tf.ones(softmax_log_0H.get_shape())
+
+            softmax_log_0 = tf.stack([softmax_log_0H,softmax_log_SV,softmax_log_SV], axis=3)
+            softmax_log_1 = tf.stack([softmax_log_1H,softmax_log_SV,softmax_log_SV], axis=3)
+
+            softmax_log_0 = tf.image.hsv_to_rgb(softmax_log_0)
+            softmax_log_1 = tf.image.hsv_to_rgb(softmax_log_1)
+
+            softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_log_0), dtype=tf.uint8)
+            softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_log_1), dtype=tf.uint8)
+           
+            tf.summary.image("softmax_0", softmax_log_0,max_outputs=FLAGS.patch_layer)
+            tf.summary.image("softmax_1", softmax_log_1,max_outputs=FLAGS.patch_layer)
+
+            # # this is grayscale one
+            # softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
+            # softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,1]), dtype=tf.uint8)
+            # tf.summary.image("softmax_0", tf.transpose(softmax_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+            # tf.summary.image("softmax_1", tf.transpose(softmax_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 
         # Op for calculating loss
         with tf.name_scope("cross_entropy"):
