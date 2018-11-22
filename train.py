@@ -16,11 +16,11 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_sphere',
+tf.app.flags.DEFINE_string('data_dir', './data_promise-2012-separated-reduced',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
+tf.app.flags.DEFINE_string('image_filename','image.mhd',
     """Image filename""")
-tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
+tf.app.flags.DEFINE_string('label_filename','segmentation.mhd',
     """Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
@@ -32,10 +32,8 @@ tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp_momentum/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.00000003,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-6,
     """Initial learning rate""")
-# tf.app.flags.DEFINE_float('init_learning_rate',0.000003,
-#     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
 tf.app.flags.DEFINE_integer('decay_steps',100,
@@ -167,7 +165,7 @@ def train():
             trainTransforms = [
                 NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
-                NiftiDataset.Resample((0.25,0.25,2)),
+                NiftiDataset.Resample((0.25,0.25,0.25)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
                 NiftiDataset.RandomNoise()
@@ -188,7 +186,7 @@ def train():
             testTransforms = [
                 NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
-                NiftiDataset.Resample((0.25,0.25,2)),
+                NiftiDataset.Resample((0.25,0.25,0.25)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
                 ]

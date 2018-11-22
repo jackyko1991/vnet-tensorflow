@@ -55,10 +55,17 @@ class NiftiDataset(object):
   def input_parser(self,image_path, label_path):
     # read image and label
     image = self.read_image(image_path.decode("utf-8"))
+     # cast image and label
+    castImageFilter = sitk.CastImageFilter()
+    castImageFilter.SetOutputPixelType(sitk.sitkInt16)
+    image = castImageFilter.Execute(image)
+
     if self.train:
       label = self.read_image(label_path.decode("utf-8"))
+      castImageFilter.SetOutputPixelType(sitk.sitkInt8)
+      label = castImageFilter.Execute(label)
     else:
-      label = sitk.Image(image.GetSize(),sitk.sitkUInt32)
+      label = sitk.Image(image.GetSize(),sitk.sitkInt8)
       label.SetOrigin(image.GetOrigin())
       label.SetSpacing(image.GetSpacing())
 
@@ -172,6 +179,7 @@ class Resample(object):
     image = resampler.Execute(image)
 
     # resample on segmentation
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
     resampler.SetOutputOrigin(label.GetOrigin())
     resampler.SetOutputDirection(label.GetDirection())
     # print("Resampling segmentation...")
@@ -206,19 +214,31 @@ class Padding(object):
     if (size_old[0] >= self.output_size[0]) and (size_old[1] >= self.output_size[1]) and (size_old[2] >= self.output_size[2]):
       return sample
     else:
+      self.output_size = list(self.output_size)
+      if size_old[0] > self.output_size[0]:
+        self.output_size[0] = size_old[0]
+      if size_old[1] > self.output_size[1]:
+        self.output_size[1] = size_old[1]
+      if size_old[2] > self.output_size[2]:
+        self.output_size[2] = size_old[2]
+ 
+      self.output_size = tuple(self.output_size)
+
       resampler = sitk.ResampleImageFilter()
-      resampler.SetInterpolator(2)
       resampler.SetOutputSpacing(image.GetSpacing())
       resampler.SetSize(self.output_size)
 
       # resample on image
+      resampler.SetInterpolator(2)
       resampler.SetOutputOrigin(image.GetOrigin())
       resampler.SetOutputDirection(image.GetDirection())
       image = resampler.Execute(image)
 
       # resample on label
+      resampler.SetInterpolator(sitk.sitkNearestNeighbor)
       resampler.SetOutputOrigin(label.GetOrigin())
       resampler.SetOutputDirection(label.GetDirection())
+
       label = resampler.Execute(label)
 
       return {'image': image, 'label': label}
@@ -264,6 +284,10 @@ class RandomCrop(object):
 
     roiFilter = sitk.RegionOfInterestImageFilter()
     roiFilter.SetSize([size_new[0],size_new[1],size_new[2]])
+
+    # statFilter = sitk.StatisticsImageFilter()
+    # statFilter.Execute(label)
+    # print(statFilter.GetMaximum(), statFilter.GetSum())
 
     while not contain_label: 
       # get the start crop coordinate in ijk
