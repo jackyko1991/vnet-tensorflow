@@ -24,7 +24,7 @@ import tensorflow as tf
 from Layers import convolution, down_convolution, up_convolution, get_num_channels,prelu
 
 
-def convolution_block(layer_input, num_convolutions, keep_prob, activation_fn):
+def convolution_block(layer_input, num_convolutions, keep_prob, activation_fn, is_training):
     x = layer_input
     n_channels = get_num_channels(x)
     for i in range(num_convolutions):
@@ -32,33 +32,42 @@ def convolution_block(layer_input, num_convolutions, keep_prob, activation_fn):
             x = convolution(x, [5, 5, 5, n_channels, n_channels])
             if i == num_convolutions - 1:
                 x = x + layer_input
+            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             x = activation_fn(x)
             x = tf.nn.dropout(x, keep_prob)
     return x
 
 
-def convolution_block_2(layer_input, fine_grained_features, num_convolutions, keep_prob, activation_fn):
+def convolution_block_2(layer_input, fine_grained_features, num_convolutions, keep_prob, activation_fn, is_training):
 
     x = tf.concat((layer_input, fine_grained_features), axis=-1)
     n_channels = get_num_channels(layer_input)
     if num_convolutions == 1:
         with tf.variable_scope('conv_' + str(1)):
             x = convolution(x, [5, 5, 5, n_channels * 2, n_channels])
+            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+            layer_input = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             x = x + layer_input
+            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             x = activation_fn(x)
             x = tf.nn.dropout(x, keep_prob)
         return x
 
     with tf.variable_scope('conv_' + str(1)):
         x = convolution(x, [5, 5, 5, n_channels * 2, n_channels])
+        x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
         x = activation_fn(x)
         x = tf.nn.dropout(x, keep_prob)
 
     for i in range(1, num_convolutions):
         with tf.variable_scope('conv_' + str(i+1)):
             x = convolution(x, [5, 5, 5, n_channels, n_channels])
+            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+            layer_input = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             if i == num_convolutions - 1:
                 x = x + layer_input
+            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             x = activation_fn(x)
             x = tf.nn.dropout(x, keep_prob)
 
@@ -106,30 +115,39 @@ class VNet(object):
         with tf.variable_scope('vnet/input_layer'):
             if input_channels == 1:
                 x = tf.tile(x, [1, 1, 1, 1, self.num_channels])
+                x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+
             else:
-                x = self.activation_fn(convolution(x, [5, 5, 5, input_channels, self.num_channels]))
+                x = convolution(x, [5, 5, 5, input_channels, self.num_channels])
+                x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+                x = self.activation_fn(x)
 
         features = list()
 
         for l in range(self.num_levels):
             with tf.variable_scope('vnet/encoder/level_' + str(l + 1)):
-                x = convolution_block(x, self.num_convolutions[l], keep_prob, activation_fn=self.activation_fn)
+                x = convolution_block(x, self.num_convolutions[l], keep_prob, activation_fn=self.activation_fn, is_training=is_training)
                 features.append(x)
                 with tf.variable_scope('down_convolution'):
-                    x = self.activation_fn(down_convolution(x, factor=2, kernel_size=[2, 2, 2]))
+                    x = down_convolution(x, factor=2, kernel_size=[2, 2, 2])
+                    x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+                    x = self.activation_fn(x)
 
         with tf.variable_scope('vnet/bottom_level'):
-            x = convolution_block(x, self.bottom_convolutions, keep_prob, activation_fn=self.activation_fn)
+            x = convolution_block(x, self.bottom_convolutions, keep_prob, activation_fn=self.activation_fn, is_training=is_training)
 
         for l in reversed(range(self.num_levels)):
             with tf.variable_scope('vnet/decoder/level_' + str(l + 1)):
                 f = features[l]
                 with tf.variable_scope('up_convolution'):
-                    x = self.activation_fn(up_convolution(x, tf.shape(f), factor=2, kernel_size=[2, 2, 2]))
+                    x = up_convolution(x, tf.shape(f), factor=2, kernel_size=[2, 2, 2])
+                    x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+                    x = self.activation_fn(x)
 
-                x = convolution_block_2(x, f, self.num_convolutions[l], keep_prob, activation_fn=self.activation_fn)
+                x = convolution_block_2(x, f, self.num_convolutions[l], keep_prob, activation_fn=self.activation_fn, is_training=is_training)
 
         with tf.variable_scope('vnet/output_layer'):
             logits = convolution(x, [1, 1, 1, self.num_channels, self.num_classes])
+            logits = tf.layers.batch_normalization(logits, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
 
         return logits
