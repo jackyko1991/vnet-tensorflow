@@ -16,21 +16,21 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_promise-2012-separated-reduced',
+tf.app.flags.DEFINE_string('data_dir', '/home/jacky/disk0/projects/vnet_data_whole_spine',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','image.mhd',
+tf.app.flags.DEFINE_string('image_filename','img.nii',
     """Image filename""")
-tf.app.flags.DEFINE_string('label_filename','segmentation.mhd',
+tf.app.flags.DEFINE_string('label_filename','label.nii',
     """Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")               
-tf.app.flags.DEFINE_integer('patch_size',256,
+tf.app.flags.DEFINE_integer('patch_size',128,
     """Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',32,
+tf.app.flags.DEFINE_integer('patch_layer',128,
     """Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
-tf.app.flags.DEFINE_string('log_dir', './tmp_momentum/log',
+tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
 tf.app.flags.DEFINE_float('init_learning_rate',1e-6,
     """Initial learning rate""")
@@ -42,9 +42,9 @@ tf.app.flags.DEFINE_integer('display_step',10,
     """Display and logging interval (train steps)""")
 tf.app.flags.DEFINE_integer('save_interval',1,
     """Checkpoint save interval (epochs)""")
-tf.app.flags.DEFINE_string('checkpoint_dir', './tmp_momentum/ckpt',
+tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
     """Directory where to write checkpoint""")
-tf.app.flags.DEFINE_string('model_dir','./tmp_momentum/model',
+tf.app.flags.DEFINE_string('model_dir','./tmp/model',
     """Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
     """Restore training from last checkpoint""")
@@ -165,7 +165,7 @@ def train():
             trainTransforms = [
                 NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
-                NiftiDataset.Resample((0.25,0.25,0.25)),
+                NiftiDataset.Resample((0.45,0.45,0.45)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
                 NiftiDataset.RandomNoise()
@@ -186,7 +186,7 @@ def train():
             testTransforms = [
                 NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
-                NiftiDataset.Resample((0.25,0.25,0.25)),
+                NiftiDataset.Resample((0.45,0.45,0.45)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
                 ]
@@ -220,7 +220,7 @@ def train():
                 bottom_convolutions=3, # default 3
                 activation_fn="prelu") # default relu
 
-            logits = model.network_fn(images_placeholder, is_training=True)
+            logits = model.network_fn(images_placeholder)
 
         for batch in range(FLAGS.batch_size):
             logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
