@@ -23,7 +23,7 @@ tf.app.flags.DEFINE_string('image_filename','image.nii',
     """Image filename""")
 tf.app.flags.DEFINE_string('model_path','./tmp_dental/ckpt/checkpoint-5665.meta',
     """Path to saved models""")
-tf.app.flags.DEFINE_string('checkpoint_dir','./tmp_dental/ckpt',
+tf.app.flags.DEFINE_string('checkpoint_path','./tmp_dental/ckpt/checkpoint-5665',
     """Directory of saved checkpoints""")
 tf.app.flags.DEFINE_integer('patch_size',256,
     """Size of a data patch""")
@@ -70,8 +70,7 @@ def evaluate():
     with tf.Session(config=config) as sess:  
         print("{}: Start evaluation...".format(datetime.datetime.now()))
 
-        imported_meta.restore(sess, tf.train.latest_checkpoint(FLAGS.checkpoint_dir,latest_filename="checkpoint-latest"))
-        # imported_meta.restore(sess, FLAGS.model_path)
+        imported_meta.restore(sess, FLAGS.checkpoint_path)
         print("{}: Restore checkpoint success".format(datetime.datetime.now()))
         
         for case in os.listdir(FLAGS.data_dir):
