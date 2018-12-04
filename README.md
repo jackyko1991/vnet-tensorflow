@@ -182,5 +182,36 @@ Note that you should keep preprocessing pipeline similar to the one in `train.py
 ## C++ Inference
 We provide a C++ inference example under directory [cxx](./cxx). For C++ implementation, please follow the guide [here](./cxx/README.md)
 
+## Citations
+Use the following Bibtex if you need to cite this repository:
+```bibtex
+@misc{jackyko1991_vnet_tensorflow,
+  author = {Jacky KL Ko},
+  title = {Implementation of vnet in tensorflow for medical image segmentation},
+  howpublished = {\url{https://github.com/jackyko1991/vnet-tensorflow}},
+  year = {2018},
+  publisher={Github},
+  journal={GitHub repository},
+}
+
+@inproceedings{milletari2016v,
+  title={V-net: Fully convolutional neural networks for volumetric medical image segmentation},
+  author={Milletari, Fausto and Navab, Nassir and Ahmadi, Seyed-Ahmad},
+  booktitle={3D Vision (3DV), 2016 Fourth International Conference on},
+  pages={565--571},
+  year={2016},
+  organization={IEEE}
+}
+
+@misc{MiguelMonteiro_VNet_Tensorflow,
+  author = {Miguel Monteiro},
+  title = {VNet-Tensorflow: Tensorflow implementation of the V-Net architecture for medical imaging segmentation.},
+  howpublished = {\url{https://github.com/MiguelMonteiro/VNet-Tensorflow}},
+  year = {2018},
+  publisher={Github},
+  journal={GitHub repository},
+}
+```
+
 ## Author
 Jacky Ko jackkykokoko@gmail.com
