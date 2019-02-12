@@ -153,6 +153,21 @@ class Reorient(object):
 
     return {'image': image, 'label': label}
 
+class Invert(object):
+  """
+  Invert the image intensity from 0-255 
+  """
+
+  def __init__(self):
+    self.name = 'Invert'
+
+  def __call__(self, sample):
+    invertFilter = sitk.InvertIntensityImageFilter()
+    image = invertFilter.Execute(sample['image'],255)
+    label = sample['label']
+
+    return {'image': image, 'label': label}
+
 class Resample(object):
   """
   Resample the volume in a sample to a given voxel size
