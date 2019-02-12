@@ -133,6 +133,26 @@ class StatisticalNormalization(object):
 
     return {'image': image, 'label': label}
 
+class Reorient(object):
+  """
+  (Beta) Function to orient image in specific axes order
+  The elements of the order array must be an permutation of the numbers from 0 to 2.
+  """
+
+  def __init__(self, order):
+    self.name = 'Reoreient'
+    assert isinstance(order, (int, tuple))
+    assert len(order) == 3
+    self.order = order
+
+  def __call__(self, sample):
+    reorientFilter = sitk.PermuteAxesImageFilter()
+    reorientFilter.SetOrder(self.order)
+    image = reorientFilter.Execute(sample['image'])
+    label = reorientFilter.Execute(sample['label'])
+
+    return {'image': image, 'label': label}
+
 class Resample(object):
   """
   Resample the volume in a sample to a given voxel size
