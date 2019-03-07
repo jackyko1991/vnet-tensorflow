@@ -379,3 +379,90 @@ class RandomNoise(object):
     image = self.noiseFilter.Execute(image)
 
     return {'image': image, 'label': label}
+
+class ConfidenceCrop(object):
+  """
+  Crop the image in a sample that is certain distance from individual labels center. 
+  This is usually used for data augmentation with very small label volumes.
+  The distance offset from connected label centroid is model by Gaussian distribution with mean zero and user input sigma (default to be 2.5)
+  i.e. If n isolated labels are found, one of the label's centroid will be randomly selected, and the cropping zone will be offset by following scheme:
+  s_i = np.random.normal(mu, sigma*crop_size/2), 1000)
+  offset_i = random.choice(s_i)
+  where i represents axis direction
+  A higher sigma value will provide a higher offset
+
+  Args:
+    output_size (tuple or int): Desired output size. If int, cubic crop is made.
+    sigma (float): Normalized standard deviation value.
+  """
+
+  def __init__(self, output_size, sigma=2.5):
+    self.name = 'Confidence Crop'
+
+    assert isinstance(output_size, (int, tuple))
+    if isinstance(output_size, int):
+      self.output_size = (output_size, output_size, output_size)
+    else:
+      assert len(output_size) == 3
+      self.output_size = output_size
+
+    assert isinstance(sigma, (float, tuple))
+    if isinstance(sigma, float) and sigma >= 0:
+      self.sigma = (sigma,sigma,sigma)
+    else:
+      assert len(sigma) == 3
+      self.sigma = sigma
+
+  def __call__(self,sample):
+    image, label = sample['image'], sample['label']
+    size_new = self.output_size
+
+    # guarantee label type to be integer
+    castFilter = sitk.CastImageFilter()
+    castFilter.SetOutputPixelType(sitk.sitkInt8)
+    label = castFilter.Execute(label)
+
+    ccFilter = sitk.ConnectedComponentImageFilter()
+    labelCC = ccFilter.Execute(label)
+
+    labelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
+    labelShapeFilter.Execute(labelCC)
+
+    if labelShapeFilter.GetNumberOfLabels() == 0:
+      # handle image without label
+      selectedLabel = 0
+      centroid = (int(self.output_size[0]/2), int(self.output_size[1]/2), int(self.output_size[2]/2))
+    else:
+      # randomly select of the label's centroid
+      selectedLabel = random.randint(1,labelShapeFilter.GetNumberOfLabels())
+      centroid = label.TransformPhysicalPointToIndex(labelShapeFilter.GetCentroid(selectedLabel))
+
+    centroid = list(centroid)
+
+    start = [-1,-1,-1] #placeholder for start point array
+    end = [self.output_size[0]-1, self.output_size[1]-1,self.output_size[2]-1] #placeholder for start point array
+    offset = [-1,-1,-1] #placeholder for start point array
+    for i in range(3):
+      # edge case
+      if centroid[i] < (self.output_size[i]/2):
+        centroid[i] = int(self.output_size[i]/2)
+      elif (image.GetSize()[i]-centroid[i]) < (self.output_size[i]/2):
+        centroid[i] = image.GetSize()[i] - int(self.output_size[i]/2) -1
+
+      # get start point
+      while ((start[i]<0) or (end[i]>(image.GetSize()[i]-1))):
+        offset[i] = self.NormalOffset(self.output_size[i],self.sigma[i])
+        start[i] = centroid[i] + offset[i] - int(self.output_size[i]/2)
+        end[i] = start[i] + self.output_size[i] - 1
+
+    roiFilter = sitk.RegionOfInterestImageFilter()
+    roiFilter.SetSize(self.output_size)
+    roiFilter.SetIndex(start)
+    croppedImage = roiFilter.Execute(image)
+    croppedLabel = roiFilter.Execute(label)
+
+    return {'image': croppedImage, 'label': croppedLabel}
+
+  def NormalOffset(self,size, sigma):
+    s = np.random.normal(0, size*sigma/2, 100) # 100 sample is good enough
+    return int(round(random.choice(s)))
