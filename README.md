@@ -162,7 +162,8 @@ Additional preprocessing classes:
   - BSplineDeformation 
 
   **Hint: Directly apply deformation is slow. Instead you can first perform cropping with a larger than patch size region then with deformation, then crop to actual patch size. If you apply deformation to exact training size region, it will create black zone which may affect final training accuracy.**
-  usage example
+  
+  Example:
   ```python
   NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
   NiftiDataset.BSplineDeformation(),
