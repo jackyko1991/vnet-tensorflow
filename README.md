@@ -156,8 +156,23 @@ Additional preprocessing classes:
 - Reorient (take care on the direction when performing evaluation)
 - Invert
 - ConfidenceCrop (for very small volume like cerebral microbleeds, alternative of RandomCrop)
-- BSplineDeformation
+- Deformations:
+  The deformations are following SITK deep learning data augmentation documentations, will be expand soon.
+  Now contains:
+  - BSplineDeformation 
 
+  Reference:
+  https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
+  https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
+  https://simpleitk.github.io/SPIE2018_COURSE/spatial_transformations.pdf
+  **Hint: Directly apply deformation is slow. Instead you can first perform cropping with a larger than patch size region then with deformation, the crop to actual patch size. If you apply deformation to specified exact size region, it will create black zone which may affect final training accuracy.**
+  usage example
+  ```python
+  NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
+  NiftiDataset.BSplineDeformation(),
+  NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.25)),
+  ```
+  
 #### Tensorboard
 In training stage, result can be visualized via Tensorboard. Run the following command:
 ```console
