@@ -128,13 +128,13 @@ Available training parameters
  ```
 
 #### Image batch preparation
-Typically medical image is large in size when comparing with natural images (height x widht x layers x modality), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
+Typically medical image is large in size when comparing with natural images (height x width x layers x modality), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
 
-Here we introduce serveral data augmentation skills that allow users to normalize and resample medical images in 3D sense. In `train.py`, you can access to `trainTransforms`/`testTransforms`. For general purpose we combine the advantage of tensorflow dataset api and SimpleITK (SITK) image processing toolkit together. Following is the preprocessing pipeline in SITK side to faciliate image augumentation with limited available memories.
+Here we introduce serveral data augmentation skills that allow users to normalize and resample medical images in 3D sense. In `train.py`, you can access to `trainTransforms`/`testTransforms`. For general purpose we combine the advantage of tensorflow dataset api and SimpleITK (SITK) image processing toolkit together. Following is the preprocessing pipeline in SITK side to facilitate image augmentation with limited available memories.
 
 1. Image Normalization (fit to 0-255)
 2. Isotropic Resampling (adjustable size, in mm)
-3. Paddinig (allow input image batch smaller than network input size to be trained)
+3. Gadding (allow input image batch smaller than network input size to be trained)
 4. Random Crop (randomly select a zone in the 3D medical image in exact size as network input)
 5. Gaussian Noise
 
@@ -150,6 +150,13 @@ trainTransforms = [
 ```
 
 To write you own preprocessing pipeline, you need to modify the preprocessing classes in `NiftiDataset.py`
+
+Additional preprocessing classes:
+- StatisticalNormalization
+- Reorient (take care on the direction when performing evaluation)
+- Invert
+- ConfidenceCrop (for very small volume like cerebral microbleeds, alternative of RandomCrop)
+- BSplineDeformation
 
 #### Tensorboard
 In training stage, result can be visualized via Tensorboard. Run the following command:
