@@ -466,3 +466,46 @@ class ConfidenceCrop(object):
   def NormalOffset(self,size, sigma):
     s = np.random.normal(0, size*sigma/2, 100) # 100 sample is good enough
     return int(round(random.choice(s)))
+
+class BSplineDeformation(object):
+  """
+  Image deformation with a sparse set of control points to control a free form deformation.
+  Details can be found here: 
+  https://simpleitk.github.io/SPIE2018_COURSE/spatial_transformations.pdf
+  https://itk.org/Doxygen/html/classitk_1_1BSplineTransform.html
+
+  Args:
+    randomness (int,float): BSpline deformation scaling factor, default is 10.
+  """
+
+  def __init__(self, randomness=10):
+    self.name = 'BSpline Deformation'
+
+    assert isinstance(randomness, (int,float))
+    if randomness > 0:
+      self.randomness = randomness
+    else:
+      raise RuntimeError('Randomness should be non zero values')
+
+  def __call__(self,sample):
+    image, label = sample['image'], sample['label']
+    spline_order = 3
+    domain_physical_dimensions = [image.GetSize()[0]*image.GetSpacing()[0],image.GetSize()[1]*image.GetSpacing()[1],image.GetSize()[2]*image.GetSpacing()[2]]
+
+    bspline = sitk.BSplineTransform(3, spline_order)
+    bspline.SetTransformDomainOrigin(image.GetOrigin())
+    bspline.SetTransformDomainDirection(image.GetDirection())
+    bspline.SetTransformDomainPhysicalDimensions(domain_physical_dimensions)
+    bspline.SetTransformDomainMeshSize((10,10,10))
+
+    # Random displacement of the control points.
+    originalControlPointDisplacements = np.random.random(len(bspline.GetParameters()))*self.randomness
+    bspline.SetParameters(originalControlPointDisplacements)
+
+    image = sitk.Resample(image, bspline)
+    label = sitk.Resample(label, bspline)
+    return {'image': image, 'label': label}
+
+  def NormalOffset(self,size, sigma):
+    s = np.random.normal(0, size*sigma/2, 100) # 100 sample is good enough
+    return int(round(random.choice(s)))
