@@ -298,7 +298,7 @@ class RandomCrop(object):
       assert len(output_size) == 3
       self.output_size = output_size
 
-    assert isinstance(drop_ratio, float)
+    assert isinstance(drop_ratio, (int,float))
     if drop_ratio >=0 and drop_ratio<=1:
       self.drop_ratio = drop_ratio
     else:
