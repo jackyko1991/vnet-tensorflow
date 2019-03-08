@@ -161,10 +161,6 @@ Additional preprocessing classes:
   Now contains:
   - BSplineDeformation 
 
-  Reference:
-  https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
-  https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
-  https://simpleitk.github.io/SPIE2018_COURSE/spatial_transformations.pdf
   **Hint: Directly apply deformation is slow. Instead you can first perform cropping with a larger than patch size region then with deformation, then crop to actual patch size. If you apply deformation to exact training size region, it will create black zone which may affect final training accuracy.**
   usage example
   ```python
@@ -234,6 +230,12 @@ Use the following Bibtex if you need to cite this repository:
   journal={GitHub repository},
 }
 ```
+
+## References:
+- SimpleITK guide on deep learning data augmentation:
+https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
+https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
+https://simpleitk.github.io/SPIE2018_COURSE/spatial_transformations.pdf
 
 ## Author
 Jacky Ko jackkykokoko@gmail.com
