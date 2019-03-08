@@ -234,7 +234,7 @@ Use the following Bibtex if you need to cite this repository:
 
 ## References:
 - SimpleITK guide on deep learning data augmentation:
-https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
+https://simpleitk.readthedocs.io/en/master/Documentation/docs/source/fundamentalConcepts.html
 https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
 https://simpleitk.github.io/SPIE2018_COURSE/spatial_transformations.pdf
 
