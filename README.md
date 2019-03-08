@@ -165,7 +165,7 @@ Additional preprocessing classes:
   https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
   https://simpleitk.github.io/SPIE2018_COURSE/data_augmentation.pdf
   https://simpleitk.github.io/SPIE2018_COURSE/spatial_transformations.pdf
-  **Hint: Directly apply deformation is slow. Instead you can first perform cropping with a larger than patch size region then with deformation, the crop to actual patch size. If you apply deformation to specified exact size region, it will create black zone which may affect final training accuracy.**
+  **Hint: Directly apply deformation is slow. Instead you can first perform cropping with a larger than patch size region then with deformation, then crop to actual patch size. If you apply deformation to specified exact size region, it will create black zone which may affect final training accuracy.**
   usage example
   ```python
   NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
