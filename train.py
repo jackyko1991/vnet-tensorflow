@@ -11,7 +11,7 @@ import math
 import datetime
 
 # select gpu devices
-os.environ["CUDA_VISIBLE_DEVICES"] = "1" # e.g. "0,1,2", "0,2" 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2" 
 
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
@@ -32,7 +32,7 @@ tf.app.flags.DEFINE_integer('epochs',999999999,
     """Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
     """Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',1e-6,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
     """Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.01,
     """Exponential decay learning rate factor""")
