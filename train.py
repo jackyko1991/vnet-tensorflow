@@ -192,7 +192,7 @@ def train():
                 ]
 
             TestDataset = NiftiDataset.NiftiDataset(
-                data_dir=train_data_dir,
+                data_dir=test_data_dir,
                 image_filename=FLAGS.image_filename,
                 label_filename=FLAGS.label_filename,
                 transforms=testTransforms,
