@@ -41,7 +41,7 @@ class NiftiDataset(object):
     dataset = tf.data.Dataset.from_tensor_slices((image_paths,label_paths))
 
     dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
-      self.input_parser, [image_path, label_path], [tf.float32,tf.int32])))
+      self.input_parser, [image_path, label_path], [tf.float32,tf.int32,tf.float32])))
 
     self.dataset = dataset
     self.data_size = len(image_paths)
@@ -75,18 +75,31 @@ class NiftiDataset(object):
       for transform in self.transforms:
         sample = transform(sample)
 
+    # create distance map
+    distFilter = sitk.DanielssonDistanceMapImageFilter()
+    distFilter.SetInputIsBinary(True)
+    distFilter.SetUseImageSpacing(True)
+    distMap = distFilter.Execute(sample['label'])
+    resacleFilter = sitk.RescaleIntensityImageFilter()
+    resacleFilter.SetOutputMaximum(1)
+    resacleFilter.SetOutputMinimum(0)
+    distMap = resacleFilter.Execute(distMap)
+
     # convert sample to tf tensors
     image_np = sitk.GetArrayFromImage(sample['image'])
     label_np = sitk.GetArrayFromImage(sample['label'])
+    distMap_np = sitk.GetArrayFromImage(distMap)
 
     image_np = np.asarray(image_np,np.float32)
     label_np = np.asarray(label_np,np.int32)
+    distMap_np = np.asarray(distMap_np,np.float32)
 
     # to unify matrix dimension order between SimpleITK([x,y,z]) and numpy([z,y,x])
     image_np = np.transpose(image_np,(2,1,0))
     label_np = np.transpose(label_np,(2,1,0))
+    distMap_np = np.transpose(distMap_np,(2,1,0))
 
-    return image_np, label_np
+    return image_np, label_np, distMap_np
 
 class Normalization(object):
   """

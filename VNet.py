@@ -67,7 +67,6 @@ def convolution_block_2(layer_input, fine_grained_features, num_convolutions, ke
             if i == num_convolutions - 1:
                 x = x + layer_input
             x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
-            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             x = activation_fn(x)
             x = tf.nn.dropout(x, keep_prob)
 

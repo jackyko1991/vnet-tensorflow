@@ -17,19 +17,19 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir','./data_dental/evaluate',
+tf.app.flags.DEFINE_string('data_dir','./data_lung/evaluate2',
     """Directory of evaluation data""")
-tf.app.flags.DEFINE_string('image_filename','image.nii',
+tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
     """Image filename""")
-tf.app.flags.DEFINE_string('model_path','./tmp_dental/ckpt/checkpoint-5665.meta',
+tf.app.flags.DEFINE_string('model_path','./tmp_lung/ckpt/checkpoint-139560.meta',
     """Path to saved models""")
-tf.app.flags.DEFINE_string('checkpoint_path','./tmp_dental/ckpt/checkpoint-5665',
+tf.app.flags.DEFINE_string('checkpoint_path','./tmp_lung/ckpt/checkpoint-139560',
     """Directory of saved checkpoints""")
-tf.app.flags.DEFINE_integer('patch_size',256,
+tf.app.flags.DEFINE_integer('patch_size',64,
     """Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
-tf.app.flags.DEFINE_integer('stride_inplane', 128,
+tf.app.flags.DEFINE_integer('stride_inplane', 60,
     """Stride size in 2D plane""")
 tf.app.flags.DEFINE_integer('stride_layer',16,
     """Stride size in layer direction""")
@@ -58,9 +58,10 @@ def evaluate():
 
     # create transformations to image and labels
     transforms = [
+        # NiftiDataset.Reorient((2,0,1)),
         # NiftiDataset.Normalization(),
         NiftiDataset.StatisticalNormalization(2.5),
-        NiftiDataset.Resample(0.25),
+        NiftiDataset.Resample((0.45,0.45,0.45)),
         NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer))      
         ]
 
@@ -220,6 +221,7 @@ def evaluate():
                 label_path = os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz')
                 writer.SetFileName(label_path)
                 writer.Execute(label)
+
                 print("{}: Save evaluate label at {} success".format(datetime.datetime.now(),label_path))
 
                 print("{}: Resampling probability map back to original image space...".format(datetime.datetime.now()))
