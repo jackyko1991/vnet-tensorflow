@@ -9,6 +9,7 @@ import os
 import VNet
 import math
 import datetime
+import attention
 
 # select gpu devices
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2" 
@@ -16,15 +17,15 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
+tf.app.flags.DEFINE_string('data_dir', './data_bet',
     """Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','img.nii',
+tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
     """Image filename""")
-tf.app.flags.DEFINE_string('label_filename','label.nii',
+tf.app.flags.DEFINE_string('label_filename','bet-mask.nii.gz',
     """Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
     """Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',256,
+tf.app.flags.DEFINE_integer('patch_size',100,
     """Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',32,
     """Number of layers in data patch""")
@@ -54,7 +55,9 @@ tf.app.flags.DEFINE_integer('min_pixel',30,
     """Minimum non-zero pixels in the cropped label""")
 tf.app.flags.DEFINE_integer('shuffle_buffer_size',5,
     """Number of elements used in shuffle buffer""")
-tf.app.flags.DEFINE_string('loss_function','l2',
+tf.app.flags.DEFINE_string('loss_function','sorensen',
+    """Loss function used in optimization (xent, weight_xent, sorensen, jaccard)""")
+tf.app.flags.DEFINE_string('attention_loss_function','l2',
     """Loss function used in optimization (l2)""")
 tf.app.flags.DEFINE_string('optimizer','sgd',
     """Optimization method (sgd, adam, momentum, nesterov_momentum)""")
@@ -137,6 +140,16 @@ def dice_coe(output, target, loss_type='jaccard', axis=[1, 2, 3], smooth=1e-5):
     dice = tf.reduce_mean(dice)
     return dice
 
+def grayscale_to_rainbow(image):
+    # grayscale to rainbow colormap, convert to HSV (H = reversed grayscale from 0:2/3, S and V are all 1)
+    # then convert to RGB
+    H = tf.squeeze((1. - image)*2./3., axis=-1)
+    SV = tf.ones(H.get_shape())
+    HSV = tf.stack([H,SV,SV], axis=3)
+    RGB = tf.image.hsv_to_rgb(HSV)
+
+    return RGB
+
 def train():
     """Train the Vnet model"""
     with tf.Graph().as_default():
@@ -151,11 +164,14 @@ def train():
         for batch in range(FLAGS.batch_size):
             images_log = tf.cast(images_placeholder[batch:batch+1,:,:,:,0], dtype=tf.uint8)
             labels_log = tf.cast(tf.scalar_mul(255,labels_placeholder[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
-            distmap_log = tf.cast(tf.scalar_mul(255,distmap_placeholder[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
+
+            # dist map will be plot in color
+            distmap_log = grayscale_to_rainbow(tf.transpose(distmap_placeholder[batch:batch+1,:,:,:,0],[3,1,2,0]))
+            distmap_log = tf.cast(tf.scalar_mul(255,distmap_log), dtype=tf.uint8)
 
             tf.summary.image("image", tf.transpose(images_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
             tf.summary.image("label", tf.transpose(labels_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
-            tf.summary.image("distmap", tf.transpose(distmap_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+            tf.summary.image("distmap", distmap_log,max_outputs=FLAGS.patch_layer)
 
         # Get images and labels
         train_data_dir = os.path.join(FLAGS.data_dir,'training')
@@ -168,7 +184,7 @@ def train():
             trainTransforms = [
                 NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
-                NiftiDataset.Resample((0.5,0.5,0.5)),
+                NiftiDataset.Resample((1,1,1)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
                 # NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
@@ -193,7 +209,7 @@ def train():
             testTransforms = [
                 NiftiDataset.StatisticalNormalization(2.5),
                 # NiftiDataset.Normalization(),
-                # NiftiDataset.Resample((0.5,0.5,0.5)),
+                NiftiDataset.Resample((1,1,1)),
                 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
                 NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
                 # NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
@@ -229,114 +245,114 @@ def train():
                 num_convolutions=(1,2,3,3), # default (1,2,3,3), size should equal to num_levels
                 bottom_convolutions=3, # default 3
                 activation_fn="prelu") # default relu
+            logits_vnet = model.network_fn(images_placeholder)
 
-            logits = model.network_fn(images_placeholder)
+        with tf.name_scope("attention"):
+            attentionModule = attention.AttentionModule(
+                num_classes=2,
+                is_training=True,
+                activation_fn="relu",
+                keep_prob=1.0)
+            logits_attention = attentionModule.GetNetwork(logits_vnet)
+            softmax_attention = tf.nn.softmax(logits_attention, name="softmax_attention")
 
         for batch in range(FLAGS.batch_size):
-            logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
-            logits_min = tf.reduce_min(logits[batch:batch+1,:,:,:,:])
+            softmax_att_log_0 = grayscale_to_rainbow(tf.transpose(softmax_attention[batch:batch+1,:,:,:,0],[3,1,2,0]))
+            softmax_att_log_1 = grayscale_to_rainbow(tf.transpose(softmax_attention[batch:batch+1,:,:,:,1],[3,1,2,0]))
+            softmax_att_log_0 = tf.cast(tf.scalar_mul(255,softmax_att_log_0), dtype=tf.uint8)
+            softmax_att_log_1 = tf.cast(tf.scalar_mul(255,softmax_att_log_1), dtype=tf.uint8)
+           
+            tf.summary.image("softmax_attention_0", softmax_att_log_0,max_outputs=FLAGS.patch_layer)
+            tf.summary.image("softmax_attention_1", softmax_att_log_1,max_outputs=FLAGS.patch_layer)
 
-            logits_log_0 = logits[batch:batch+1,:,:,:,0]
-            logits_log_1 = logits[batch:batch+1,:,:,:,1]
+        with tf.name_scope("masked_vnet"):
+            logits_masked = (1+softmax_attention)*logits_vnet
 
-            # normalize to 0-255 range
-            logits_log_0 = tf.cast((logits_log_0-logits_min)*255./(logits_max-logits_min), dtype=tf.uint8)
-            logits_log_1 = tf.cast((logits_log_1-logits_min)*255./(logits_max-logits_min), dtype=tf.uint8)
+        # for batch in range(FLAGS.batch_size):
+        #     logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
+        #     logits_min = tf.reduce_min(logits[batch:batch+1,:,:,:,:])
 
-            tf.summary.image("logits_0", tf.transpose(logits_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
-            tf.summary.image("logits_1", tf.transpose(logits_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+        #     logits_log_0 = logits[batch:batch+1,:,:,:,0]
+        #     logits_log_1 = logits[batch:batch+1,:,:,:,1]
 
-        # # Exponential decay learning rate
-        # train_batches_per_epoch = math.ceil(TrainDataset.data_size/FLAGS.batch_size)
-        # decay_steps = train_batches_per_epoch*FLAGS.decay_steps
+        #     # normalize to 0-255 range
+        #     logits_log_0 = tf.cast((logits_log_0-logits_min)*255./(logits_max-logits_min), dtype=tf.uint8)
+        #     logits_log_1 = tf.cast((logits_log_1-logits_min)*255./(logits_max-logits_min), dtype=tf.uint8)
 
+        #     tf.summary.image("logits_0", tf.transpose(logits_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+        #     tf.summary.image("logits_1", tf.transpose(logits_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+
+        # learning rate
         with tf.name_scope("learning_rate"):
-            learning_rate = FLAGS.init_learning_rate
-        #     learning_rate = tf.train.exponential_decay(FLAGS.init_learning_rate,
-        #         global_step,
-        #         decay_steps,
-        #         FLAGS.decay_factor,
-        #         staircase=True)
+            learning_rate = tf.train.exponential_decay(FLAGS.init_learning_rate, global_step,
+                FLAGS.decay_steps,FLAGS.decay_factor,staircase=False)
         tf.summary.scalar('learning_rate', learning_rate)
 
-        # softmax op for probability layer
+        # softmax op for masked logit layer
         with tf.name_scope("softmax"):
-            softmax_op = tf.nn.softmax(logits,name="softmax")
+            softmax_op = tf.nn.softmax(logits_masked,name="softmax")
 
         for batch in range(FLAGS.batch_size):
-            # grayscale to rainbow colormap, convert to HSV (H = reversed grayscale from 0:2/3, S and V are all 1)
-            # then convert to RGB
-            softmax_log_0H = (1. - tf.transpose(softmax_op[batch:batch+1,:,:,:,0],[3,1,2,0]))*2./3.
-            softmax_log_1H = (1. - tf.transpose(softmax_op[batch:batch+1,:,:,:,1],[3,1,2,0]))*2./3.
-
-            softmax_log_0H = tf.squeeze(softmax_log_0H,axis=-1)
-            softmax_log_1H = tf.squeeze(softmax_log_1H,axis=-1)
-            softmax_log_SV = tf.ones(softmax_log_0H.get_shape())
-
-            softmax_log_0 = tf.stack([softmax_log_0H,softmax_log_SV,softmax_log_SV], axis=3)
-            softmax_log_1 = tf.stack([softmax_log_1H,softmax_log_SV,softmax_log_SV], axis=3)
-
-            softmax_log_0 = tf.image.hsv_to_rgb(softmax_log_0)
-            softmax_log_1 = tf.image.hsv_to_rgb(softmax_log_1)
-
+            softmax_log_0 = grayscale_to_rainbow(tf.transpose(softmax_op[batch:batch+1,:,:,:,0],[3,1,2,0]))
+            softmax_log_1 = grayscale_to_rainbow(tf.transpose(softmax_op[batch:batch+1,:,:,:,1],[3,1,2,0]))
             softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_log_0), dtype=tf.uint8)
             softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_log_1), dtype=tf.uint8)
            
             tf.summary.image("softmax_0", softmax_log_0,max_outputs=FLAGS.patch_layer)
             tf.summary.image("softmax_1", softmax_log_1,max_outputs=FLAGS.patch_layer)
 
-            # # this is grayscale one
-            # softmax_log_0 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
-            # softmax_log_1 = tf.cast(tf.scalar_mul(255,softmax_op[batch:batch+1,:,:,:,1]), dtype=tf.uint8)
-            # tf.summary.image("softmax_0", tf.transpose(softmax_log_0,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
-            # tf.summary.image("softmax_1", tf.transpose(softmax_log_1,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
-
         # Op for calculating loss
-        # with tf.name_scope("cross_entropy"):
-        #     loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        #         logits=logits,
-        #         labels=tf.squeeze(labels_placeholder, 
-        #         squeeze_dims=[4])))
-        # tf.summary.scalar('loss',loss_op)
+        with tf.name_scope("loss"):
+            if (FLAGS.loss_function == "xent"):
+                loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    logits=logits_masked,
+                    labels=tf.squeeze(labels_placeholder, 
+                    squeeze_dims=[4])))
+            elif(FLAGS.loss_function == "weighted_cross_entropy"):
+                class_weights = tf.constant([1.0, 1.0])
 
-        # with tf.name_scope("weighted_cross_entropy"):
-        #     class_weights = tf.constant([1.0, 1.0])
+                # deduce weights for batch samples based on their true label
+                onehot_labels = tf.one_hot(tf.squeeze(labels_placeholder,squeeze_dims=[4]),depth = 2)
 
-        #     # deduce weights for batch samples based on their true label
-        #     onehot_labels = tf.one_hot(tf.squeeze(labels_placeholder,squeeze_dims=[4]),depth = 2)
+                weights = tf.reduce_sum(class_weights * onehot_labels, axis=-1)
+                # compute your (unweighted) softmax cross entropy loss
+                unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    logits=logits_masked,
+                    labels=tf.squeeze(labels_placeholder, 
+                    squeeze_dims=[4]))
+                # apply the weights, relying on broadcasting of the multiplication
+                weighted_loss = unweighted_loss * weights
+                # reduce the result to get your final loss
+                loss_op = tf.reduce_mean(weighted_loss)
+            elif(FLAGS.loss_function == "sorensen"):
+                # Dice Similarity, currently only for binary segmentation
+                sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3,4])
+                loss_op = 1. - sorensen
+            elif(FLAGS.loss_function == "jaccard"):
+                # Dice Similarity, currently only for binary segmentation
+                jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard', axis=[1,2,3,4])
+                loss_op = 1. - jaccard
+        tf.summary.scalar('loss',loss_op)
 
-        #     weights = tf.reduce_sum(class_weights * onehot_labels, axis=-1)
-        #     # compute your (unweighted) softmax cross entropy loss
-        #     unweighted_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        #         logits=logits,
-        #         labels=tf.squeeze(labels_placeholder, 
-        #         squeeze_dims=[4]))
-        #     # apply the weights, relying on broadcasting of the multiplication
-        #     weighted_loss = unweighted_loss * weights
-        #     # reduce the result to get your final loss
-        #     weighted_loss_op = tf.reduce_mean(weighted_loss)
-                
-        # tf.summary.scalar('weighted_loss',weighted_loss_op)
-
-        # loss function
+        # attention loss function
         with tf.name_scope("attention_loss"):
-            if (FLAGS.loss_function == "l2"):
-                loss_op = tf.reduce_mean(tf.math.square(softmax_op[:,:,:,:,1:2])-tf.math.square(distmap_placeholder))
-            # if (FLAGS.loss_function == "xent"):
-            #     loss_fn = loss_op
-            # elif(FLAGS.loss_function == "weight_xent"):
-            #     loss_fn = weighted_loss_op
-            # elif(FLAGS.loss_function == "sorensen"):
-            #     loss_fn = sorensen_loss
-            # elif(FLAGS.loss_function == "jaccard"):
-            #     loss_fn = jaccard_loss
+            if (FLAGS.attention_loss_function == "l2"):
+                distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
+                distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
+                distmap = tf.stack([distmap_0,distmap_1],axis=-1)
+                att_loss_op = tf.reduce_mean(tf.math.square(softmax_op-distmap)/2)
             else:
                 sys.exit("Invalid loss function");
-        tf.summary.scalar('loss',loss_op)
-            
+        tf.summary.scalar('attention_loss',att_loss_op)
+
+        # total loss
+        with tf.name_scope("total_loss"):
+            total_loss_op = att_loss_op + loss_op
+        tf.summary.scalar('total_loss',total_loss_op)
+
         # Argmax Op to generate label from logits
         with tf.name_scope("predicted_label"):
-            pred = tf.argmax(logits, axis=4 , name="prediction")
+            pred = tf.argmax(logits_masked, axis=4 , name="prediction")
 
         for batch in range(FLAGS.batch_size):
             pred_log = tf.cast(tf.scalar_mul(255,pred[batch:batch+1,:,:,:]), dtype=tf.uint8)
@@ -347,19 +363,6 @@ def train():
             correct_pred = tf.equal(tf.expand_dims(pred,-1), tf.cast(labels_placeholder,dtype=tf.int64))
             accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
         tf.summary.scalar('accuracy', accuracy)
-
-        # # Dice Similarity, currently only for binary segmentation
-        # with tf.name_scope("dice"):
-        #     # sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
-        #     # jaccard = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='jaccard')
-        #     sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3,4])
-        #     jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard', axis=[1,2,3,4])
-        #     sorensen_loss = 1. - sorensen
-        #     jaccard_loss = 1. - jaccard
-        # tf.summary.scalar('sorensen', sorensen)
-        # tf.summary.scalar('jaccard', jaccard)
-        # tf.summary.scalar('sorensen_loss', sorensen_loss)
-        # tf.summary.scalar('jaccard_loss',jaccard_loss)
 
         # Training Op
         with tf.name_scope("training"):
@@ -376,7 +379,7 @@ def train():
                 sys.exit("Invalid optimizer");
 
             train_op = optimizer.minimize(
-                loss = loss_op,
+                loss = total_loss_op,
                 global_step=global_step)
 
         # # epoch checkpoint manipulation
@@ -431,9 +434,10 @@ def train():
                         distMap = distMap[:,:,:,:,np.newaxis]
                         
                         model.is_training = True;
-                        train, summary, loss = sess.run([train_op, summary_op, loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+                        train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
                         
-                        print('{}: Training loss: {}'.format(datetime.datetime.now(), str(loss)))
+                        print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
+                        print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(loss)))
 
                         train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
                         train_summary_writer.flush()

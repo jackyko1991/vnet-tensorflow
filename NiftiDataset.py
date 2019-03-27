@@ -80,6 +80,14 @@ class NiftiDataset(object):
     distFilter.SetInputIsBinary(True)
     distFilter.SetUseImageSpacing(True)
     distMap = distFilter.Execute(sample['label'])
+    divFilter = sitk.DivideImageFilter()
+    distMap = divFilter.Execute(distMap,5) # sigma of the attention distribution
+    powFilter = sitk.PowImageFilter()
+    distMap = powFilter.Execute(distMap,2)
+    expFilter = sitk.ExpNegativeImageFilter()
+    distMap = expFilter.Execute(distMap)
+
+    # normalize data to 0-1
     resacleFilter = sitk.RescaleIntensityImageFilter()
     resacleFilter.SetOutputMaximum(1)
     resacleFilter.SetOutputMinimum(0)
