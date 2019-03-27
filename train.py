@@ -17,17 +17,17 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_bet',
+tf.app.flags.DEFINE_string('data_dir', './data_SWAN',
 	"""Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','image.nii.gz',
+tf.app.flags.DEFINE_string('image_filename','img.nii.gz',
 	"""Image filename""")
-tf.app.flags.DEFINE_string('label_filename','bet-mask.nii.gz',
+tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
 	"""Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',100,
+tf.app.flags.DEFINE_integer('patch_size',128,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',32,
+tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
@@ -35,9 +35,9 @@ tf.app.flags.DEFINE_string('log_dir', './tmp_att/log',
 	"""Directory where to write training and testing event logs """)
 tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
-tf.app.flags.DEFINE_float('decay_factor',0.01,
+tf.app.flags.DEFINE_float('decay_factor',1,
 	"""Exponential decay learning rate factor""")
-tf.app.flags.DEFINE_integer('decay_steps',100,
+tf.app.flags.DEFINE_integer('decay_steps',5,
 	"""Number of epoch before applying one learning rate decay""")
 tf.app.flags.DEFINE_integer('display_step',10,
 	"""Display and logging interval (train steps)""")
@@ -189,7 +189,7 @@ def train():
 				NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 				# NiftiDataset.BSplineDeformation(),
-				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(1.0,1.0,0.5)),
+				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.5)),
 				NiftiDataset.RandomNoise()
 				]
 
@@ -214,7 +214,7 @@ def train():
 				NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 				# NiftiDataset.BSplineDeformation(),
-				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(1.0,1.0,0.5)),
+				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(1.0,1.0,1.0)),
 				]
 
 			TestDataset = NiftiDataset.NiftiDataset(
@@ -340,7 +340,7 @@ def train():
 				distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
 				distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
 				distmap = tf.stack([distmap_0,distmap_1],axis=-1)
-				att_loss_op = tf.reduce_mean(tf.math.square(softmax_op-distmap)/2)
+				att_loss_op = tf.reduce_mean(tf.math.square(softmax_attention-distmap)/2)
 			else:
 				sys.exit("Invalid loss function");
 		tf.summary.scalar('attention_loss',att_loss_op)
