@@ -10,6 +10,7 @@ import VNet
 import math
 import datetime
 import attention
+import OutputModule
 
 # select gpu devices
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2" 
@@ -31,7 +32,7 @@ tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
-tf.app.flags.DEFINE_string('log_dir', './tmp_att/log',
+tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
 tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
@@ -269,12 +270,12 @@ def train():
 			logits_masked = (1+softmax_attention)*logits_vnet
 
 		with tf.name_scope("output"):
-			output = attention.AttentionModule(
+			outputModule = OutputModule.OutputModule(
 				num_classes=2,
 				is_training=True,
 				activation_fn="relu",
 				keep_prob=1.0)
-			logits_output = output.GetNetwork(logits_masked)
+			logits_output = outputModule.GetNetwork(logits_masked)
 
 		# for batch in range(FLAGS.batch_size):
 		#     logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
@@ -348,7 +349,7 @@ def train():
 				distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
 				distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
 				distmap = tf.stack([distmap_0,distmap_1],axis=-1)
-				att_loss_op = tf.reduce_mean(tf.math.square(softmax_attention-distmap)/2)
+				att_loss_op = tf.reduce_mean(tf.square(softmax_attention-distmap)/2)
 			else:
 				sys.exit("Invalid loss function");
 		tf.summary.scalar('attention_loss',att_loss_op)
@@ -360,7 +361,7 @@ def train():
 
 		# Argmax Op to generate label from logits
 		with tf.name_scope("predicted_label"):
-			pred_op = tf.argmax(logits_masked, axis=4 , name="prediction")
+			pred_op = tf.argmax(logits_output, axis=4 , name="prediction")
 
 		for batch in range(FLAGS.batch_size):
 			pred_log = tf.cast(tf.scalar_mul(255,pred_op[batch:batch+1,:,:,:]), dtype=tf.uint8)
@@ -378,8 +379,8 @@ def train():
 			tn, tn_op = tf.metrics.true_negatives(labels_placeholder, pred_op, name="true_negatives")
 			fp, fp_op = tf.metrics.false_positives(labels_placeholder, pred_op, name="false_positives")
 			fn, fn_op = tf.metrics.false_negatives(labels_placeholder, pred_op, name="false_negatives")
-			sensitivity_op = tf.math.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.math.add(tp_op,fn_op),tf.float32))
-			specificity_op = tf.math.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.math.add(tn_op,fp_op),tf.float32))
+			sensitivity_op = tf.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.add(tp_op,fn_op),tf.float32))
+			specificity_op = tf.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.add(tn_op,fp_op),tf.float32))
 			dice_op = 2.*tp_op/(2.*tp_op+fp_op+fn_op)
 		tf.summary.scalar('sensitivity', sensitivity_op)
 		tf.summary.scalar('specificity', specificity_op)
