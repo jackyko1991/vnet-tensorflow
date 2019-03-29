@@ -17,7 +17,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_SWAN',
+tf.app.flags.DEFINE_string('data_dir', './data',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('image_filename','img.nii.gz',
 	"""Image filename""")
@@ -25,7 +25,7 @@ tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
 	"""Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',32,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
@@ -43,9 +43,9 @@ tf.app.flags.DEFINE_integer('display_step',10,
 	"""Display and logging interval (train steps)""")
 tf.app.flags.DEFINE_integer('save_interval',1,
 	"""Checkpoint save interval (epochs)""")
-tf.app.flags.DEFINE_string('checkpoint_dir', './tmp_att/ckpt',
+tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
 	"""Directory where to write checkpoint""")
-tf.app.flags.DEFINE_string('model_dir','./tmp_att/model',
+tf.app.flags.DEFINE_string('model_dir','./tmp/model',
 	"""Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
 	"""Restore training from last checkpoint""")
@@ -268,6 +268,14 @@ def train():
 		with tf.name_scope("masked_vnet"):
 			logits_masked = (1+softmax_attention)*logits_vnet
 
+		with tf.name_scope("output"):
+			output = attention.AttentionModule(
+				num_classes=2,
+				is_training=True,
+				activation_fn="relu",
+				keep_prob=1.0)
+			logits_output = output.GetNetwork(logits_masked)
+
 		# for batch in range(FLAGS.batch_size):
 		#     logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
 		#     logits_min = tf.reduce_min(logits[batch:batch+1,:,:,:,:])
@@ -290,7 +298,7 @@ def train():
 
 		# softmax op for masked logit layer
 		with tf.name_scope("softmax"):
-			softmax_op = tf.nn.softmax(logits_masked,name="softmax")
+			softmax_op = tf.nn.softmax(logits_output,name="softmax")
 
 		for batch in range(FLAGS.batch_size):
 			softmax_log_0 = grayscale_to_rainbow(tf.transpose(softmax_op[batch:batch+1,:,:,:,0],[3,1,2,0]))
@@ -305,7 +313,7 @@ def train():
 		with tf.name_scope("loss"):
 			if (FLAGS.loss_function == "xent"):
 				loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-					logits=logits_masked,
+					logits=logits_output,
 					labels=tf.squeeze(labels_placeholder, 
 					squeeze_dims=[4])))
 			elif(FLAGS.loss_function == "weighted_cross_entropy"):
