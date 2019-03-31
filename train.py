@@ -26,9 +26,9 @@ tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
 	"""Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',32,
+tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',16,
+tf.app.flags.DEFINE_integer('patch_layer',5,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
