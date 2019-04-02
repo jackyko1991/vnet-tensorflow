@@ -60,7 +60,7 @@ All training, testing and evaluation data should put in `./data`
     |   |   ├── case2
     |   |   ├──...
     ├── tmp
-    |   ├── cktp                  # Tensorflow checkpoints
+    |   ├── ck                  # Tensorflow checkpoints
     |   └── log                   # Tensorboard logging folder
     ├── ...
     
