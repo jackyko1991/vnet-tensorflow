@@ -50,7 +50,8 @@ class NiftiDataset(object):
   def read_image(self,path):
     reader = sitk.ImageFileReader()
     reader.SetFileName(path)
-    return reader.Execute()
+    image = reader.Execute()
+    return image
 
   def input_parser(self,image_path, label_path):
     # read image and label
