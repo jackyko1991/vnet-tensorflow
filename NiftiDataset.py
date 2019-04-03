@@ -270,23 +270,24 @@ class Padding(object):
   def __call__(self,sample):
     image, label = sample['image'], sample['label']
     size_old = image.GetSize()
-
+    
     if (size_old[0] >= self.output_size[0]) and (size_old[1] >= self.output_size[1]) and (size_old[2] >= self.output_size[2]):
       return sample
     else:
-      self.output_size = list(self.output_size)
+      output_size = self.output_size
+      output_size = list(output_size)
       if size_old[0] > self.output_size[0]:
-        self.output_size[0] = size_old[0]
+        output_size[0] = size_old[0]
       if size_old[1] > self.output_size[1]:
-        self.output_size[1] = size_old[1]
+        output_size[1] = size_old[1]
       if size_old[2] > self.output_size[2]:
-        self.output_size[2] = size_old[2]
+        output_size[2] = size_old[2]
  
-      self.output_size = tuple(self.output_size)
+      output_size = tuple(output_size)
 
       resampler = sitk.ResampleImageFilter()
       resampler.SetOutputSpacing(image.GetSpacing())
-      resampler.SetSize(self.output_size)
+      resampler.SetSize(output_size)
 
       # resample on image
       resampler.SetInterpolator(2)
