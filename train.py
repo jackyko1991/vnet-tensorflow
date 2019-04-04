@@ -16,7 +16,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', '/home/jacky/disk0/projects/vnet_data_whole_spine',
+tf.app.flags.DEFINE_string('data_dir', './data',
     """Directory of stored data.""")
 tf.app.flags.DEFINE_string('image_filename','img.nii',
     """Image filename""")
