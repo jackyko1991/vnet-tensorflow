@@ -50,8 +50,8 @@ All training, testing and evaluation data should put in `./data`
     |   |   ├──...
     │   ├── training              # Put all training data here
     |   |   ├── case1             # foldername for the cases is arbitary
-    |   |   |   ├── img.nii.gz    # Image for testing
-    |   |   |   └── label.nii.gz  # Corresponding label for testing
+    |   |   |   ├── img.nii.gz    # Image for training
+    |   |   |   └── label.nii.gz  # Corresponding label for training
     |   |   ├── case2
     |   |   ├──...
     │   └── evaluation            # Put all evaluation data here
