@@ -515,6 +515,108 @@ class ConfidenceCrop(object):
 			s = np.random.normal(0, size*sigma/2, 100) # 100 sample is good enough
 			return int(round(random.choice(s)))
 
+class ConfidenceCrop2(object):
+	"""
+	Crop the image in a sample that is certain distance from individual labels center. 
+	This is usually used for data augmentation with very small label volumes.
+	The distance offset from connected label bounding box center is a uniform random distribution within user specified range
+	Regions containing label is considered to be positive while regions without label is negative. This distribution is governed by the user defined probability
+
+	Args:
+	output_size (tuple or int): Desired output size. If int, cubic crop is made.
+	range (int): Bounding box random offset max value
+	probability (float): Probability to get positive labels
+  """
+
+  	def __init__(self, output_size, rand_range=3,probability=0.5):
+    	self.name = 'Confidence Crop 2'
+
+    	assert isinstance(output_size, (int, tuple))
+    	if isinstance(output_size, int):
+      	self.output_size = (output_size, output_size, output_size)
+	    else:
+	      	assert len(output_size) == 3
+	      	self.output_size = output_size
+
+	    assert isinstance(rand_range, (int,tuple))
+	    if isinstance(rand_range, int) and rand_range >= 0:
+	      	self.rand_range = (rand_range,rand_range,rand_range)
+	    else:
+	      	assert len(rand_range) == 3
+	      	self.rand_range = rand_range
+
+	    assert isinstance(probability, float)
+	    if probability >= 0 and probability <= 1:
+	      	self.probability = probability
+
+	def __call__(self,sample):
+	    image, label = sample['image'], sample['label']
+	    size_new = self.output_size
+
+	    # guarantee label type to be integer
+	    castFilter = sitk.CastImageFilter()
+	    castFilter.SetOutputPixelType(sitk.sitkInt16)
+	    label = castFilter.Execute(label)
+
+	    # choose whether positive or negative label to crop
+	    zerosList = [0]*int(10*(1-self.probability))
+	    onesList = [1]*int(10*self.probability)
+	    choiceList = []
+	    choiceList.extend(zerosList)
+	    choiceList.extend(onesList)
+	    labelType = random.choice(choiceList)
+
+	    if labelType == 0:
+	      	# randomly pick a region
+	      	croppedImage, croppedLabel = self.RandomEmptyRegion(image,label)
+	    else:
+		    # get the number of labels
+		    ccFilter = sitk.ConnectedComponentImageFilter()
+		    labelCC = ccFilter.Execute(label)
+		    labelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
+		    labelShapeFilter.Execute(labelCC)
+
+		    if labelShapeFilter.GetNumberOfLabels() == 0:
+		    	croppedImage, croppedLabel = self.RandomEmptyRegion(image,label)
+		    else:
+		        selectedLabel = random.choice(range(0,labelShapeFilter.GetNumberOfLabels())) + 1 
+		        selectedBbox = labelShapeFilter.GetBoundingBox(selectedLabel)
+		        index = [0,0,0]
+		        for i in range(3):
+		        	index[i] = selectedBbox[i] + int(selectedBbox[i+3]/2) - int(self.output_size[i]/2) + random.choice(range(-1*self.rand_range[i],self.rand_range[i]+1))
+		          	if image.GetSize()[i] - index[i] - 1 < self.output_size[i]:
+		            	index[i] = image.GetSize()[i] - self.output_size[i] - 1
+		          	if index[i]<0:
+		            	index[i] = 0
+
+		        roiFilter = sitk.RegionOfInterestImageFilter()
+		        roiFilter.SetSize(self.output_size)
+		        roiFilter.SetIndex(index)
+		        croppedImage = roiFilter.Execute(image)
+		        croppedLabel = roiFilter.Execute(label)
+
+	    return {'image': croppedImage, 'label': croppedLabel}
+
+	  	def RandomEmptyRegion(self,image, label):
+	    	index = [0,0,0]
+	    	contain_label = False
+	    	while not contain_label:
+	      	for i in range(3):
+	        	index[i] = random.choice(range(0,image.GetSize()[i]-self.output_size[i]-1))
+	      	roiFilter = sitk.RegionOfInterestImageFilter()
+	      	roiFilter.SetSize(self.output_size)
+	      	roiFilter.SetIndex(index)
+	      	croppedLabel = roiFilter.Execute(label)
+	      	statFilter = sitk.StatisticsImageFilter()
+	      	statFilter.Execute(croppedLabel)
+
+	      	if statFilter.GetSum() < 1:
+	        	croppedImage = roiFilter.Execute(image)
+	        	contain_label = True
+	        	break
+	    	return croppedImage,croppedLabel
+
+
 class BSplineDeformation(object):
   	"""
   	Image deformation with a sparse set of control points to control a free form deformation.
