@@ -23,7 +23,7 @@ tf.app.flags.DEFINE_string('data_dir', './data',
 tf.app.flags.DEFINE_string('image_filename','img.nii.gz',
 	"""Image filename""")
 tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
-	"""Image filename""")
+	"""Label filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
 tf.app.flags.DEFINE_integer('patch_size',64,
