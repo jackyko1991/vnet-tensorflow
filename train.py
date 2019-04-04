@@ -10,6 +10,7 @@ import VNet
 import math
 import datetime
 import attention
+import OutputModule
 
 # select gpu devices
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2" 
@@ -17,7 +18,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_SWAN',
+tf.app.flags.DEFINE_string('data_dir', './data',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('image_filename','img.nii.gz',
 	"""Image filename""")
@@ -25,13 +26,13 @@ tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
 	"""Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',16,
+tf.app.flags.DEFINE_integer('patch_layer',5,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
-tf.app.flags.DEFINE_string('log_dir', './tmp_att/log',
+tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
 tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
@@ -43,9 +44,9 @@ tf.app.flags.DEFINE_integer('display_step',10,
 	"""Display and logging interval (train steps)""")
 tf.app.flags.DEFINE_integer('save_interval',1,
 	"""Checkpoint save interval (epochs)""")
-tf.app.flags.DEFINE_string('checkpoint_dir', './tmp_att/ckpt',
+tf.app.flags.DEFINE_string('checkpoint_dir', './tmp/ckpt',
 	"""Directory where to write checkpoint""")
-tf.app.flags.DEFINE_string('model_dir','./tmp_att/model',
+tf.app.flags.DEFINE_string('model_dir','./tmp/model',
 	"""Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
 	"""Restore training from last checkpoint""")
@@ -268,6 +269,14 @@ def train():
 		with tf.name_scope("masked_vnet"):
 			logits_masked = (1+softmax_attention)*logits_vnet
 
+		with tf.name_scope("output"):
+			outputModule = OutputModule.OutputModule(
+				num_classes=2,
+				is_training=True,
+				activation_fn="relu",
+				keep_prob=1.0)
+			logits_output = outputModule.GetNetwork(logits_masked)
+
 		# for batch in range(FLAGS.batch_size):
 		#     logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
 		#     logits_min = tf.reduce_min(logits[batch:batch+1,:,:,:,:])
@@ -290,7 +299,7 @@ def train():
 
 		# softmax op for masked logit layer
 		with tf.name_scope("softmax"):
-			softmax_op = tf.nn.softmax(logits_masked,name="softmax")
+			softmax_op = tf.nn.softmax(logits_output,name="softmax")
 
 		for batch in range(FLAGS.batch_size):
 			softmax_log_0 = grayscale_to_rainbow(tf.transpose(softmax_op[batch:batch+1,:,:,:,0],[3,1,2,0]))
@@ -305,7 +314,7 @@ def train():
 		with tf.name_scope("loss"):
 			if (FLAGS.loss_function == "xent"):
 				loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-					logits=logits_masked,
+					logits=logits_output,
 					labels=tf.squeeze(labels_placeholder, 
 					squeeze_dims=[4])))
 			elif(FLAGS.loss_function == "weighted_cross_entropy"):
@@ -340,7 +349,7 @@ def train():
 				distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
 				distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
 				distmap = tf.stack([distmap_0,distmap_1],axis=-1)
-				att_loss_op = tf.reduce_mean(tf.math.square(softmax_attention-distmap)/2)
+				att_loss_op = tf.reduce_mean(tf.square(softmax_attention-distmap)/2)
 			else:
 				sys.exit("Invalid loss function");
 		tf.summary.scalar('attention_loss',att_loss_op)
@@ -352,7 +361,7 @@ def train():
 
 		# Argmax Op to generate label from logits
 		with tf.name_scope("predicted_label"):
-			pred_op = tf.argmax(logits_masked, axis=4 , name="prediction")
+			pred_op = tf.argmax(logits_output, axis=4 , name="prediction")
 
 		for batch in range(FLAGS.batch_size):
 			pred_log = tf.cast(tf.scalar_mul(255,pred_op[batch:batch+1,:,:,:]), dtype=tf.uint8)
@@ -370,8 +379,8 @@ def train():
 			tn, tn_op = tf.metrics.true_negatives(labels_placeholder, pred_op, name="true_negatives")
 			fp, fp_op = tf.metrics.false_positives(labels_placeholder, pred_op, name="false_positives")
 			fn, fn_op = tf.metrics.false_negatives(labels_placeholder, pred_op, name="false_negatives")
-			sensitivity_op = tf.math.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.math.add(tp_op,fn_op),tf.float32))
-			specificity_op = tf.math.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.math.add(tn_op,fp_op),tf.float32))
+			sensitivity_op = tf.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.add(tp_op,fn_op),tf.float32))
+			specificity_op = tf.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.add(tn_op,fp_op),tf.float32))
 			dice_op = 2.*tp_op/(2.*tp_op+fp_op+fn_op)
 		tf.summary.scalar('sensitivity', sensitivity_op)
 		tf.summary.scalar('specificity', specificity_op)
