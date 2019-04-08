@@ -31,7 +31,7 @@ class NiftiDataset(object):
 		self.transforms = transforms
 		self.train = train
 
-		def get_dataset(self):
+	def get_dataset(self):
 		image_paths = []
 		label_paths = []
 		for case in os.listdir(self.data_dir):
