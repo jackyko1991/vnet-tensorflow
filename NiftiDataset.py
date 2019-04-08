@@ -461,59 +461,59 @@ class ConfidenceCrop(object):
 		  assert len(sigma) == 3
 		  self.sigma = sigma
 
-	  def __call__(self,sample):
-			image, label = sample['image'], sample['label']
-			size_new = self.output_size
+	def __call__(self,sample):
+		image, label = sample['image'], sample['label']
+		size_new = self.output_size
 
-			# guarantee label type to be integer
-			castFilter = sitk.CastImageFilter()
-			castFilter.SetOutputPixelType(sitk.sitkInt8)
-			label = castFilter.Execute(label)
+		# guarantee label type to be integer
+		castFilter = sitk.CastImageFilter()
+		castFilter.SetOutputPixelType(sitk.sitkInt8)
+		label = castFilter.Execute(label)
 
-			ccFilter = sitk.ConnectedComponentImageFilter()
-			labelCC = ccFilter.Execute(label)
+		ccFilter = sitk.ConnectedComponentImageFilter()
+		labelCC = ccFilter.Execute(label)
 
-			labelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
-			labelShapeFilter.Execute(labelCC)
+		labelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
+		labelShapeFilter.Execute(labelCC)
 
-			if labelShapeFilter.GetNumberOfLabels() == 0:
-				# handle image without label
-				selectedLabel = 0
-				centroid = (int(self.output_size[0]/2), int(self.output_size[1]/2), int(self.output_size[2]/2))
-			else:
-				# randomly select of the label's centroid
-				selectedLabel = random.randint(1,labelShapeFilter.GetNumberOfLabels())
-				centroid = label.TransformPhysicalPointToIndex(labelShapeFilter.GetCentroid(selectedLabel))
+		if labelShapeFilter.GetNumberOfLabels() == 0:
+			# handle image without label
+			selectedLabel = 0
+			centroid = (int(self.output_size[0]/2), int(self.output_size[1]/2), int(self.output_size[2]/2))
+		else:
+			# randomly select of the label's centroid
+			selectedLabel = random.randint(1,labelShapeFilter.GetNumberOfLabels())
+			centroid = label.TransformPhysicalPointToIndex(labelShapeFilter.GetCentroid(selectedLabel))
 
-			centroid = list(centroid)
+		centroid = list(centroid)
 
-			start = [-1,-1,-1] #placeholder for start point array
-			end = [self.output_size[0]-1, self.output_size[1]-1,self.output_size[2]-1] #placeholder for start point array
-			offset = [-1,-1,-1] #placeholder for start point array
-			for i in range(3):
-				# edge case
-				if centroid[i] < (self.output_size[i]/2):
-					centroid[i] = int(self.output_size[i]/2)
-				elif (image.GetSize()[i]-centroid[i]) < (self.output_size[i]/2):
-					centroid[i] = image.GetSize()[i] - int(self.output_size[i]/2) -1
+		start = [-1,-1,-1] #placeholder for start point array
+		end = [self.output_size[0]-1, self.output_size[1]-1,self.output_size[2]-1] #placeholder for start point array
+		offset = [-1,-1,-1] #placeholder for start point array
+		for i in range(3):
+			# edge case
+			if centroid[i] < (self.output_size[i]/2):
+				centroid[i] = int(self.output_size[i]/2)
+			elif (image.GetSize()[i]-centroid[i]) < (self.output_size[i]/2):
+				centroid[i] = image.GetSize()[i] - int(self.output_size[i]/2) -1
 
-				# get start point
-				while ((start[i]<0) or (end[i]>(image.GetSize()[i]-1))):
-					offset[i] = self.NormalOffset(self.output_size[i],self.sigma[i])
-					start[i] = centroid[i] + offset[i] - int(self.output_size[i]/2)
-					end[i] = start[i] + self.output_size[i] - 1
+			# get start point
+			while ((start[i]<0) or (end[i]>(image.GetSize()[i]-1))):
+				offset[i] = self.NormalOffset(self.output_size[i],self.sigma[i])
+				start[i] = centroid[i] + offset[i] - int(self.output_size[i]/2)
+				end[i] = start[i] + self.output_size[i] - 1
 
-			roiFilter = sitk.RegionOfInterestImageFilter()
-			roiFilter.SetSize(self.output_size)
-			roiFilter.SetIndex(start)
-			croppedImage = roiFilter.Execute(image)
-			croppedLabel = roiFilter.Execute(label)
+		roiFilter = sitk.RegionOfInterestImageFilter()
+		roiFilter.SetSize(self.output_size)
+		roiFilter.SetIndex(start)
+		croppedImage = roiFilter.Execute(image)
+		croppedLabel = roiFilter.Execute(label)
 
-			return {'image': croppedImage, 'label': croppedLabel}
+		return {'image': croppedImage, 'label': croppedLabel}
 
-		def NormalOffset(self,size, sigma):
-			s = np.random.normal(0, size*sigma/2, 100) # 100 sample is good enough
-			return int(round(random.choice(s)))
+	def NormalOffset(self,size, sigma):
+		s = np.random.normal(0, size*sigma/2, 100) # 100 sample is good enough
+		return int(round(random.choice(s)))
 
 class ConfidenceCrop2(object):
 	"""
