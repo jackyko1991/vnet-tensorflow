@@ -512,7 +512,7 @@ def train():
 							distMap = distMap[:,:,:,:,np.newaxis]
 							
 							model.is_training = False;
-							loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+							loss, summary, loss, att_loss = sess.run([loss_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
 							test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 							train_summary_writer.flush()
 
