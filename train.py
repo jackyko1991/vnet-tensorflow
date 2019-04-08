@@ -505,7 +505,7 @@ def train():
 					while True:
 						try:
 							sess.run(tf.local_variables_initializer())
-							[image, label] = sess.run(next_element_test)
+							[image, label, distMap] = sess.run(next_element_test)
 
 							image = image[:,:,:,:,np.newaxis]
 							label = label[:,:,:,:,np.newaxis]
@@ -514,6 +514,7 @@ def train():
 							model.is_training = False;
 							loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
 							test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
+							train_summary_writer.flush()
 
 						except tf.errors.OutOfRangeError:
 							break
