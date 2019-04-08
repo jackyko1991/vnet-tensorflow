@@ -41,7 +41,8 @@ class NiftiDataset(object):
 		dataset = tf.data.Dataset.from_tensor_slices((image_paths,label_paths))
 
 		dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
-			self.input_parser, [image_path, label_path], [tf.float32,tf.int32,tf.float32])))
+			self.input_parser, [image_path, label_path], [tf.float32,tf.int32,tf.float32])),
+			num_parallel_calls=multiprocessing.cpu_count())
 
 		self.dataset = dataset
 		self.data_size = len(image_paths)
@@ -597,24 +598,24 @@ class ConfidenceCrop2(object):
 
 		return {'image': croppedImage, 'label': croppedLabel}
 
-		def RandomEmptyRegion(self,image, label):
-			index = [0,0,0]
-			contain_label = False
-			while not contain_label:
-				for i in range(3):
-					index[i] = random.choice(range(0,image.GetSize()[i]-self.output_size[i]-1))
-				roiFilter = sitk.RegionOfInterestImageFilter()
-				roiFilter.SetSize(self.output_size)
-				roiFilter.SetIndex(index)
-				croppedLabel = roiFilter.Execute(label)
-				statFilter = sitk.StatisticsImageFilter()
-				statFilter.Execute(croppedLabel)
+	def RandomEmptyRegion(self,image, label):
+		index = [0,0,0]
+		contain_label = False
+		while not contain_label:
+			for i in range(3):
+				index[i] = random.choice(range(0,image.GetSize()[i]-self.output_size[i]-1))
+			roiFilter = sitk.RegionOfInterestImageFilter()
+			roiFilter.SetSize(self.output_size)
+			roiFilter.SetIndex(index)
+			croppedLabel = roiFilter.Execute(label)
+			statFilter = sitk.StatisticsImageFilter()
+			statFilter.Execute(croppedLabel)
 
-				if statFilter.GetSum() < 1:
-					croppedImage = roiFilter.Execute(image)
-					contain_label = True
-					break
-			return croppedImage,croppedLabel
+			if statFilter.GetSum() < 1:
+				croppedImage = roiFilter.Execute(image)
+				contain_label = True
+				break
+		return croppedImage,croppedLabel
 
 
 class BSplineDeformation(object):
