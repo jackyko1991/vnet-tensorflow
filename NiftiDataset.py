@@ -4,6 +4,7 @@ import os
 import numpy as np
 import math
 import random
+import multiprocessing
 
 class NiftiDataset(object):
 	"""
@@ -85,7 +86,7 @@ class NiftiDataset(object):
 		distMap = multiFilter.Execute(distMap,-1)
 
 		divFilter = sitk.DivideImageFilter()
-		distMap = divFilter.Execute(distMap,5) # sigma of the attention distribution
+		distMap = divFilter.Execute(distMap,2) # sigma of the attention distribution
 		powFilter = sitk.PowImageFilter()
 		distMap = powFilter.Execute(distMap,2)
 		expFilter = sitk.ExpNegativeImageFilter()

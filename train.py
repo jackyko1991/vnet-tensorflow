@@ -18,17 +18,17 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data',
+tf.app.flags.DEFINE_string('data_dir', './data_SWAN',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('image_filename','img.nii.gz',
 	"""Image filename""")
 tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
-	"""Label filename""")
+	"""Image filename""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',64,
+tf.app.flags.DEFINE_integer('patch_size',32,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',5,
+tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
@@ -36,7 +36,7 @@ tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
 tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
-tf.app.flags.DEFINE_float('decay_factor',1,
+tf.app.flags.DEFINE_float('decay_factor',0.99,
 	"""Exponential decay learning rate factor""")
 tf.app.flags.DEFINE_integer('decay_steps',5,
 	"""Number of epoch before applying one learning rate decay""")
@@ -59,12 +59,13 @@ tf.app.flags.DEFINE_integer('shuffle_buffer_size',5,
 tf.app.flags.DEFINE_string('loss_function','sorensen',
 	"""Loss function used in optimization (xent, weight_xent, sorensen, jaccard)""")
 tf.app.flags.DEFINE_string('attention_loss_function','l2',
-	"""Loss function used in optimization (l2)""")
+	"""Loss function used in optimization (l2,abs)""")
 tf.app.flags.DEFINE_string('optimizer','sgd',
 	"""Optimization method (sgd, adam, momentum, nesterov_momentum)""")
 tf.app.flags.DEFINE_float('momentum',0.5,
 	"""Momentum used in optimization""")
-
+tf.app.flags.DEFINE_bool('testing',True,
+	"""Perform testing after each epoch""")
 
 # tf.app.flags.DEFINE_float('class_weight',0.15,
 #     """The weight used for imbalanced classes data. Currently only apply on binary segmentation class (weight for 0th class, (1-weight) for 1st class)""")
@@ -185,12 +186,13 @@ def train():
 			trainTransforms = [
 				NiftiDataset.StatisticalNormalization(2.5),
 				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((1,1,1)),
+				# NiftiDataset.Resample((1,1,1)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
-				NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
+				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 				# NiftiDataset.BSplineDeformation(),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.5)),
+				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=10,probability=0.9),
 				NiftiDataset.RandomNoise()
 				]
 
@@ -206,35 +208,37 @@ def train():
 			trainDataset = trainDataset.shuffle(buffer_size=5)
 			trainDataset = trainDataset.batch(FLAGS.batch_size)
 
-			# use random crop for testing
-			testTransforms = [
-				NiftiDataset.StatisticalNormalization(2.5),
-				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((1,1,1)),
-				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
-				NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
-				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
-				# NiftiDataset.BSplineDeformation(),
-				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(1.0,1.0,1.0)),
-				]
+			if FLAGS.testing:
+				# use random crop for testing
+				testTransforms = [
+					NiftiDataset.StatisticalNormalization(2.5),
+					# NiftiDataset.Normalization(),
+					NiftiDataset.Resample((1,1,1)),
+					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
+					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
+					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
+					# NiftiDataset.BSplineDeformation(),
+					NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(1.0,1.0,1.0)),
+					]
 
-			TestDataset = NiftiDataset.NiftiDataset(
-				data_dir=test_data_dir,
-				image_filename=FLAGS.image_filename,
-				label_filename=FLAGS.label_filename,
-				transforms=testTransforms,
-				train=True
-			)
+				TestDataset = NiftiDataset.NiftiDataset(
+					data_dir=test_data_dir,
+					image_filename=FLAGS.image_filename,
+					label_filename=FLAGS.label_filename,
+					transforms=testTransforms,
+					train=True
+				)
 
-			testDataset = TestDataset.get_dataset()
-			testDataset = testDataset.shuffle(buffer_size=5)
-			testDataset = testDataset.batch(FLAGS.batch_size)
+				testDataset = TestDataset.get_dataset()
+				testDataset = testDataset.shuffle(buffer_size=5)
+				testDataset = testDataset.batch(FLAGS.batch_size)
 			
 		train_iterator = trainDataset.make_initializable_iterator()
 		next_element_train = train_iterator.get_next()
 
-		test_iterator = testDataset.make_initializable_iterator()
-		next_element_test = test_iterator.get_next()
+		if FLAGS.testing:
+			test_iterator = testDataset.make_initializable_iterator()
+			next_element_test = test_iterator.get_next()
 
 		# Initialize the model
 		with tf.name_scope("vnet"):
@@ -349,10 +353,26 @@ def train():
 				distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
 				distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
 				distmap = tf.stack([distmap_0,distmap_1],axis=-1)
-				att_loss_op = tf.reduce_mean(tf.square(softmax_attention-distmap)/2)
+				att_loss_op_ = tf.square(softmax_attention-distmap)*100 # attention softmax and distmap are between 0 and 1, 100 is for regularization
+				att_loss_op = tf.reduce_mean(att_loss_op_)
+			elif (FLAGS.attention_loss_function == "abs"):
+				distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
+				distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
+				distmap = tf.stack([distmap_0,distmap_1],axis=-1)
+				att_loss_op_ = tf.abs(softmax_attention-distmap)
+				att_loss_op = tf.reduce_mean(att_loss_op_)
 			else:
 				sys.exit("Invalid loss function");
 		tf.summary.scalar('attention_loss',att_loss_op)
+
+		for batch in range(FLAGS.batch_size):
+			att_loss_log_0 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,0],[3,1,2,0]))
+			att_loss_log_1 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,1],[3,1,2,0]))
+			att_loss_log_0 = tf.cast(tf.scalar_mul(255,att_loss_log_0), dtype=tf.uint8)
+			att_loss_log_1 = tf.cast(tf.scalar_mul(255,att_loss_log_1), dtype=tf.uint8)
+		   
+			tf.summary.image("att_loss_log_0", att_loss_log_0,max_outputs=FLAGS.patch_layer)
+			tf.summary.image("att_loss_log_1", att_loss_log_1,max_outputs=FLAGS.patch_layer)
 
 		# total loss
 		with tf.name_scope("total_loss"):
@@ -426,7 +446,8 @@ def train():
 
 			# summary writer for tensorboard
 			train_summary_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', sess.graph)
-			test_summary_writer = tf.summary.FileWriter(FLAGS.log_dir + '/test', sess.graph)
+			if FLAGS.testing:
+				test_summary_writer = tf.summary.FileWriter(FLAGS.log_dir + '/test', sess.graph)
 
 			# restore from checkpoint
 			if FLAGS.restore_training:
@@ -477,24 +498,25 @@ def train():
 							latest_filename="checkpoint-latest")
 						print("{}: Saving checkpoint succeed".format(datetime.datetime.now()))
 						break
-				
-				# # testing phase
-				# print("{}: Training of epoch {} finishes, testing start".format(datetime.datetime.now(),epoch+1))
-				# while True:
-				#     try:
-						# sess.run(tf.local_variables_initializer())
-				#         [image, label] = sess.run(next_element_test)
-
-				#         image = image[:,:,:,:,np.newaxis]
-				#         label = label[:,:,:,:,np.newaxis]
-				#         distMap = distMap[:,:,:,:,np.newaxis]
 						
-				#         model.is_training = False;
-				#         loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
-				#         test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
+				if FLAGS.testing:
+					# testing phase
+					print("{}: Training of epoch {} finishes, testing start".format(datetime.datetime.now(),epoch+1))
+					while True:
+						try:
+							sess.run(tf.local_variables_initializer())
+							[image, label] = sess.run(next_element_test)
 
-				#     except tf.errors.OutOfRangeError:
-				#         break
+							image = image[:,:,:,:,np.newaxis]
+							label = label[:,:,:,:,np.newaxis]
+							distMap = distMap[:,:,:,:,np.newaxis]
+							
+							model.is_training = False;
+							loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+							test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
+
+						except tf.errors.OutOfRangeError:
+							break
 
 		# close tensorboard summary writer
 		train_summary_writer.close()
