@@ -18,13 +18,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_SWAN',
+tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
 	"""Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','img.nii.gz',
+tf.app.flags.DEFINE_string('image_filename','img_crop.nii.gz',
 	"""Image filename""")
-tf.app.flags.DEFINE_string('label_filename','label.nii.gz',
+tf.app.flags.DEFINE_string('label_filename','label_crop.nii.gz',
 	"""Image filename""")
-tf.app.flags.DEFINE_integer('batch_size',1,
+tf.app.flags.DEFINE_integer('batch_size',30,
 	"""Size of batch""")           
 tf.app.flags.DEFINE_integer('patch_size',32,
 	"""Size of a data patch""")
@@ -38,7 +38,7 @@ tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.99,
 	"""Exponential decay learning rate factor""")
-tf.app.flags.DEFINE_integer('decay_steps',5,
+tf.app.flags.DEFINE_integer('decay_steps',100,
 	"""Number of epoch before applying one learning rate decay""")
 tf.app.flags.DEFINE_integer('display_step',10,
 	"""Display and logging interval (train steps)""")
@@ -158,8 +158,8 @@ def train():
 		global_step = tf.train.get_or_create_global_step()
 
 		# patch_shape(batch_size, height, width, depth, channels)
-		input_batch_shape = (FLAGS.batch_size, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
-		output_batch_shape = (FLAGS.batch_size, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
+		input_batch_shape = (None, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
+		output_batch_shape = (None, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
 		
 		images_placeholder, labels_placeholder, distmap_placeholder = placeholder_inputs(input_batch_shape,output_batch_shape)
 
@@ -186,13 +186,13 @@ def train():
 			trainTransforms = [
 				NiftiDataset.StatisticalNormalization(2.5),
 				# NiftiDataset.Normalization(),
-				# NiftiDataset.Resample((1,1,1)),
+				NiftiDataset.Resample((0.75,0.75,0.75)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
-				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
-				# NiftiDataset.BSplineDeformation(),
+				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
+				# NiftiDataset.BSplineDeformation(randomness=2),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.5)),
-				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=10,probability=0.9),
+				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=10,probability=0.7),
 				NiftiDataset.RandomNoise()
 				]
 
@@ -206,19 +206,20 @@ def train():
 			
 			trainDataset = TrainDataset.get_dataset()
 			trainDataset = trainDataset.shuffle(buffer_size=5)
-			trainDataset = trainDataset.batch(FLAGS.batch_size)
+			trainDataset = trainDataset.batch(FLAGS.batch_size,drop_remainder=True)
 
 			if FLAGS.testing:
 				# use random crop for testing
 				testTransforms = [
 					NiftiDataset.StatisticalNormalization(2.5),
 					# NiftiDataset.Normalization(),
-					NiftiDataset.Resample((1,1,1)),
+					NiftiDataset.Resample((0.75,0.75,0.75)),
 					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 					# NiftiDataset.BSplineDeformation(),
-					NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(1.0,1.0,1.0)),
+					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.75,0.75,0.75)),
+					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=10,probability=0.7),
 					]
 
 				TestDataset = NiftiDataset.NiftiDataset(
@@ -231,7 +232,7 @@ def train():
 
 				testDataset = TestDataset.get_dataset()
 				testDataset = testDataset.shuffle(buffer_size=5)
-				testDataset = testDataset.batch(FLAGS.batch_size)
+				testDataset = testDataset.batch(FLAGS.batch_size,drop_remainder=True)
 			
 		train_iterator = trainDataset.make_initializable_iterator()
 		next_element_train = train_iterator.get_next()
@@ -371,8 +372,9 @@ def train():
 			att_loss_log_0 = tf.cast(tf.scalar_mul(255,att_loss_log_0), dtype=tf.uint8)
 			att_loss_log_1 = tf.cast(tf.scalar_mul(255,att_loss_log_1), dtype=tf.uint8)
 		   
-			tf.summary.image("att_loss_log_0", att_loss_log_0,max_outputs=FLAGS.patch_layer)
-			tf.summary.image("att_loss_log_1", att_loss_log_1,max_outputs=FLAGS.patch_layer)
+			# this two values is the same for binary classification
+			tf.summary.image("att_loss_0", att_loss_log_0,max_outputs=FLAGS.patch_layer)
+			tf.summary.image("att_loss_1", att_loss_log_1,max_outputs=FLAGS.patch_layer)
 
 		# total loss
 		with tf.name_scope("total_loss"):
