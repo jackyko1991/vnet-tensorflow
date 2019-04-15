@@ -40,7 +40,7 @@ class NiftiDataset(object):
 		for case in os.listdir(self.data_dir):
 			image_path_ = []
 			for image_channel in range(len(self.image_filenames)):
-				image_path_.append(os.path.join(self.image_filenames[image_channel]))
+				image_path_.append(os.path.join(self.data_dir,case,self.image_filenames[image_channel]))
 			image_paths.append(image_path_)
 			label_paths.append(os.path.join(self.data_dir,case,self.label_filename))
 
@@ -131,7 +131,7 @@ class NiftiDataset(object):
 			if image_channel == 0:
 				image_np = image_np_[:,:,:,np.newaxis]
 			else:
-				image_np = np.append(image_np,image_np_[:,:,:,np.newaxis])
+				image_np = np.append(image_np,image_np_[:,:,:,np.newaxis],axis=-1)
 			
 		label_np = sitk.GetArrayFromImage(sample['label'])
 		label_np = np.asarray(label_np,np.int32)
@@ -624,8 +624,8 @@ class ConfidenceCrop2(object):
 				index = [0,0,0]
 				for i in range(3):
 					index[i] = selectedBbox[i] + int(selectedBbox[i+3]/2) - int(self.output_size[i]/2) + random.choice(range(-1*self.rand_range[i],self.rand_range[i]+1))
-					if image.GetSize()[i] - index[i] - 1 < self.output_size[i]:
-						index[i] = image.GetSize()[i] - self.output_size[i] - 1
+					if image[0].GetSize()[i] - index[i] - 1 < self.output_size[i]:
+						index[i] = image[0].GetSize()[i] - self.output_size[i] - 1
 					if index[i]<0:
 						index[i] = 0
 
@@ -644,20 +644,20 @@ class ConfidenceCrop2(object):
 		contain_label = False
 		while not contain_label:
 			for i in range(3):
-				index[i] = random.choice(range(0,image.GetSize()[i]-self.output_size[i]-1))
+				index[i] = random.choice(range(0,label.GetSize()[i]-self.output_size[i]-1))
 			roiFilter = sitk.RegionOfInterestImageFilter()
 			roiFilter.SetSize(self.output_size)
 			roiFilter.SetIndex(index)
 			label = roiFilter.Execute(label)
 			statFilter = sitk.StatisticsImageFilter()
-			statFilter.Execute(roiFilter)
+			statFilter.Execute(label)
 
 			if statFilter.GetSum() < 1:
 				for image_channel in range(len(image)):
 					image[image_channel] = roiFilter.Execute(image[image_channel])
 				contain_label = True
 				break
-		return image,roiFilter
+		return image,label
 
 
 class BSplineDeformation(object):

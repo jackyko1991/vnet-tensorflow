@@ -149,6 +149,6 @@ class VNet(object):
 
         with tf.variable_scope('vnet/output_layer'):
             logits = convolution(x, [1, 1, 1, self.num_channels, self.num_classes])
-            logits = tf.layers.batch_normalization(logits, momentum=0.99, epsilon=0.001,center=True, scale=True,training=self.is_training)
+            # logits = tf.layers.batch_normalization(logits, momentum=0.99, epsilon=0.001,center=True, scale=True,training=self.is_training)
 
         return logits
