@@ -11,6 +11,7 @@ import math
 import datetime
 import attention
 import OutputModule
+import json
 
 # select gpu devices
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2" 
@@ -20,11 +21,9 @@ FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
 	"""Directory of stored data.""")
-tf.app.flags.DEFINE_string('image_filename','img_crop.nii.gz',
-	"""Image filename""")
-tf.app.flags.DEFINE_string('label_filename','label_crop.nii.gz',
-	"""Image filename""")
-tf.app.flags.DEFINE_integer('batch_size',30,
+tf.app.flags.DEFINE_string('config_json','./config.json',
+	"""JSON file for filename configuration""")
+tf.app.flags.DEFINE_integer('batch_size',2,
 	"""Size of batch""")           
 tf.app.flags.DEFINE_integer('patch_size',32,
 	"""Size of a data patch""")
@@ -66,11 +65,13 @@ tf.app.flags.DEFINE_float('momentum',0.5,
 	"""Momentum used in optimization""")
 tf.app.flags.DEFINE_bool('testing',True,
 	"""Perform testing after each epoch""")
+tf.app.flags.DEFINE_bool('attention',False,
+	"""Perform testing after each epoch""")
 
 # tf.app.flags.DEFINE_float('class_weight',0.15,
 #     """The weight used for imbalanced classes data. Currently only apply on binary segmentation class (weight for 0th class, (1-weight) for 1st class)""")
 
-def placeholder_inputs(input_batch_shape, output_batch_shape):
+def placeholder_inputs(input_batch_shape, output_batch_shape, attention=False):
 	"""Generate placeholder variables to represent the the input tensors.
 	These placeholders are used as inputs by the rest of the model building
 	code and will be fed from the downloaded ckpt in the .run() loop, below.
@@ -87,9 +88,12 @@ def placeholder_inputs(input_batch_shape, output_batch_shape):
 
 	images_placeholder = tf.placeholder(tf.float32, shape=input_batch_shape, name="images_placeholder")
 	labels_placeholder = tf.placeholder(tf.int32, shape=output_batch_shape, name="labels_placeholder")   
-	distmap_placeholder = tf.placeholder(tf.float32, shape=output_batch_shape, name="distmap_placeholder")   
-   
-	return images_placeholder, labels_placeholder, distmap_placeholder
+
+	if attention:
+		distmap_placeholder = tf.placeholder(tf.float32, shape=output_batch_shape, name="distmap_placeholder")   
+		return images_placeholder, labels_placeholder, distmap_placeholder
+	else:
+		return images_placeholder, labels_placeholder
 
 def dice_coe(output, target, loss_type='jaccard', axis=[1, 2, 3], smooth=1e-5):
 	"""Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
@@ -153,28 +157,42 @@ def grayscale_to_rainbow(image):
 	return RGB
 
 def train():
+	# read configuration file
+	with open(FLAGS.config_json) as config_json:  
+		config = json.load(config_json)
+
 	"""Train the Vnet model"""
 	with tf.Graph().as_default():
 		global_step = tf.train.get_or_create_global_step()
 
 		# patch_shape(batch_size, height, width, depth, channels)
-		input_batch_shape = (None, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
+		input_channel_num = len(config['TrainingSetting']['Data']['ImageFilenames'])
+
+		input_batch_shape = (None, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, input_channel_num) 
 		output_batch_shape = (None, FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer, 1) 
 		
-		images_placeholder, labels_placeholder, distmap_placeholder = placeholder_inputs(input_batch_shape,output_batch_shape)
+		if FLAGS.attention:
+			images_placeholder, labels_placeholder, distmap_placeholder = placeholder_inputs(input_batch_shape,output_batch_shape, attention=True)
+		else:
+			images_placeholder, labels_placeholder = placeholder_inputs(input_batch_shape,output_batch_shape, attention=False)
+		
 
 		for batch in range(FLAGS.batch_size):
-			images_log = tf.cast(images_placeholder[batch:batch+1,:,:,:,0], dtype=tf.uint8)
+			# plot images in tensorboard
+			for image_channel in range(input_channel_num):
+				images_log = tf.cast(images_placeholder[batch:batch+1,:,:,:,image_channel], dtype=tf.uint8)
+				tf.summary.image("image", tf.transpose(images_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+
+				if FLAGS.attention:
+					# dist map will be plot in color
+					distmap_log = grayscale_to_rainbow(tf.transpose(distmap_placeholder[batch:batch+1,:,:,:,image_channel],[3,1,2,0]))
+					distmap_log = tf.cast(tf.scalar_mul(255,distmap_log), dtype=tf.uint8)
+					tf.summary.image("distmap", distmap_log,max_outputs=FLAGS.patch_layer)
+
+			# plot labels
 			labels_log = tf.cast(tf.scalar_mul(255,labels_placeholder[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
-
-			# dist map will be plot in color
-			distmap_log = grayscale_to_rainbow(tf.transpose(distmap_placeholder[batch:batch+1,:,:,:,0],[3,1,2,0]))
-			distmap_log = tf.cast(tf.scalar_mul(255,distmap_log), dtype=tf.uint8)
-
-			tf.summary.image("image", tf.transpose(images_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 			tf.summary.image("label", tf.transpose(labels_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
-			tf.summary.image("distmap", distmap_log,max_outputs=FLAGS.patch_layer)
-
+			
 		# Get images and labels
 		train_data_dir = os.path.join(FLAGS.data_dir,'training')
 		test_data_dir = os.path.join(FLAGS.data_dir,'testing')
@@ -198,10 +216,11 @@ def train():
 
 			TrainDataset = NiftiDataset.NiftiDataset(
 				data_dir=train_data_dir,
-				image_filename=FLAGS.image_filename,
-				label_filename=FLAGS.label_filename,
+				image_filenames=config['TrainingSetting']['Data']['ImageFilenames'],
+				label_filename=config['TrainingSetting']['Data']['LabelFilename'],
 				transforms=trainTransforms,
-				train=True
+				train=True,
+				distmap=FLAGS.attention
 				)
 			
 			trainDataset = TrainDataset.get_dataset()
@@ -224,10 +243,11 @@ def train():
 
 				TestDataset = NiftiDataset.NiftiDataset(
 					data_dir=test_data_dir,
-					image_filename=FLAGS.image_filename,
-					label_filename=FLAGS.label_filename,
+					image_filenames=config['TrainingSetting']['Data']['ImageFilenames'],
+					label_filename=config['TrainingSetting']['Data']['LabelFilename'],
 					transforms=testTransforms,
-					train=True
+					train=True,
+					distmap=FLAGS.attention
 				)
 
 				testDataset = TestDataset.get_dataset()
@@ -253,34 +273,37 @@ def train():
 				activation_fn="prelu") # default relu
 			logits_vnet = model.network_fn(images_placeholder)
 
-		with tf.name_scope("attention"):
-			attentionModule = attention.AttentionModule(
-				num_classes=2,
-				is_training=True,
-				activation_fn="relu",
-				keep_prob=1.0)
-			logits_attention = attentionModule.GetNetwork(logits_vnet)
-			softmax_attention = tf.nn.softmax(logits_attention, name="softmax_attention")
+		if FLAGS.attention:
+			with tf.name_scope("attention"):
+				attentionModule = attention.AttentionModule(
+					num_classes=2,
+					is_training=True,
+					activation_fn="relu",
+					keep_prob=1.0)
+				logits_attention = attentionModule.GetNetwork(logits_vnet)
+				softmax_attention = tf.nn.softmax(logits_attention, name="softmax_attention")
 
-		for batch in range(FLAGS.batch_size):
-			softmax_att_log_0 = grayscale_to_rainbow(tf.transpose(softmax_attention[batch:batch+1,:,:,:,0],[3,1,2,0]))
-			softmax_att_log_1 = grayscale_to_rainbow(tf.transpose(softmax_attention[batch:batch+1,:,:,:,1],[3,1,2,0]))
-			softmax_att_log_0 = tf.cast(tf.scalar_mul(255,softmax_att_log_0), dtype=tf.uint8)
-			softmax_att_log_1 = tf.cast(tf.scalar_mul(255,softmax_att_log_1), dtype=tf.uint8)
-		   
-			tf.summary.image("softmax_attention_0", softmax_att_log_0,max_outputs=FLAGS.patch_layer)
-			tf.summary.image("softmax_attention_1", softmax_att_log_1,max_outputs=FLAGS.patch_layer)
+			for batch in range(FLAGS.batch_size):
+				softmax_att_log_0 = grayscale_to_rainbow(tf.transpose(softmax_attention[batch:batch+1,:,:,:,0],[3,1,2,0]))
+				softmax_att_log_1 = grayscale_to_rainbow(tf.transpose(softmax_attention[batch:batch+1,:,:,:,1],[3,1,2,0]))
+				softmax_att_log_0 = tf.cast(tf.scalar_mul(255,softmax_att_log_0), dtype=tf.uint8)
+				softmax_att_log_1 = tf.cast(tf.scalar_mul(255,softmax_att_log_1), dtype=tf.uint8)
+			   
+				tf.summary.image("softmax_attention_0", softmax_att_log_0,max_outputs=FLAGS.patch_layer)
+				tf.summary.image("softmax_attention_1", softmax_att_log_1,max_outputs=FLAGS.patch_layer)
 
-		with tf.name_scope("masked_vnet"):
-			logits_masked = (1+softmax_attention)*logits_vnet
+			with tf.name_scope("masked_vnet"):
+				logits_masked = (1+softmax_attention)*logits_vnet
 
-		with tf.name_scope("output"):
-			outputModule = OutputModule.OutputModule(
-				num_classes=2,
-				is_training=True,
-				activation_fn="relu",
-				keep_prob=1.0)
-			logits_output = outputModule.GetNetwork(logits_masked)
+			with tf.name_scope("output"):
+				outputModule = OutputModule.OutputModule(
+					num_classes=2,
+					is_training=True,
+					activation_fn="relu",
+					keep_prob=1.0)
+				logits_output = outputModule.GetNetwork(logits_masked)
+		else:
+			logits_output = logits_vnet
 
 		# for batch in range(FLAGS.batch_size):
 		#     logits_max = tf.reduce_max(logits[batch:batch+1,:,:,:,:])
@@ -339,47 +362,50 @@ def train():
 				# reduce the result to get your final loss
 				loss_op = tf.reduce_mean(weighted_loss)
 			elif(FLAGS.loss_function == "sorensen"):
-				# Dice Similarity, currently only for binary segmentation
+				# Dice Similarity, currently only for binary segmentation, here we provide two calculation methods, first one is closer to classical dice formula
+				# sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
 				sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3,4])
 				loss_op = 1. - sorensen
 			elif(FLAGS.loss_function == "jaccard"):
-				# Dice Similarity, currently only for binary segmentation
+				# Dice Similarity, currently only for binary segmentation, here we provide two calculation methods, first one is closer to classical dice formula
+				# jaccard = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='jaccard')
 				jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard', axis=[1,2,3,4])
 				loss_op = 1. - jaccard
 		tf.summary.scalar('loss',loss_op)
 
-		# attention loss function
-		with tf.name_scope("attention_loss"):
-			if (FLAGS.attention_loss_function == "l2"):
-				distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
-				distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
-				distmap = tf.stack([distmap_0,distmap_1],axis=-1)
-				att_loss_op_ = tf.square(softmax_attention-distmap)*100 # attention softmax and distmap are between 0 and 1, 100 is for regularization
-				att_loss_op = tf.reduce_mean(att_loss_op_)
-			elif (FLAGS.attention_loss_function == "abs"):
-				distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
-				distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
-				distmap = tf.stack([distmap_0,distmap_1],axis=-1)
-				att_loss_op_ = tf.abs(softmax_attention-distmap)
-				att_loss_op = tf.reduce_mean(att_loss_op_)
-			else:
-				sys.exit("Invalid loss function");
-		tf.summary.scalar('attention_loss',att_loss_op)
+		if FLAGS.attention:
+			# attention loss function
+			with tf.name_scope("attention_loss"):
+				if (FLAGS.attention_loss_function == "l2"):
+					distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
+					distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
+					distmap = tf.stack([distmap_0,distmap_1],axis=-1)
+					att_loss_op_ = tf.square(softmax_attention-distmap)*100 # attention softmax and distmap are between 0 and 1, 100 is for regularization
+					att_loss_op = tf.reduce_mean(att_loss_op_)
+				elif (FLAGS.attention_loss_function == "abs"):
+					distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
+					distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
+					distmap = tf.stack([distmap_0,distmap_1],axis=-1)
+					att_loss_op_ = tf.abs(softmax_attention-distmap)
+					att_loss_op = tf.reduce_mean(att_loss_op_)
+				else:
+					sys.exit("Invalid loss function");
+			tf.summary.scalar('attention_loss',att_loss_op)
 
-		for batch in range(FLAGS.batch_size):
-			att_loss_log_0 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,0],[3,1,2,0]))
-			att_loss_log_1 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,1],[3,1,2,0]))
-			att_loss_log_0 = tf.cast(tf.scalar_mul(255,att_loss_log_0), dtype=tf.uint8)
-			att_loss_log_1 = tf.cast(tf.scalar_mul(255,att_loss_log_1), dtype=tf.uint8)
-		   
-			# this two values is the same for binary classification
-			tf.summary.image("att_loss_0", att_loss_log_0,max_outputs=FLAGS.patch_layer)
-			tf.summary.image("att_loss_1", att_loss_log_1,max_outputs=FLAGS.patch_layer)
+			for batch in range(FLAGS.batch_size):
+				att_loss_log_0 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,0],[3,1,2,0]))
+				att_loss_log_1 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,1],[3,1,2,0]))
+				att_loss_log_0 = tf.cast(tf.scalar_mul(255,att_loss_log_0), dtype=tf.uint8)
+				att_loss_log_1 = tf.cast(tf.scalar_mul(255,att_loss_log_1), dtype=tf.uint8)
+			   
+				# this two values is the same for binary classification
+				tf.summary.image("att_loss_0", att_loss_log_0,max_outputs=FLAGS.patch_layer)
+				tf.summary.image("att_loss_1", att_loss_log_1,max_outputs=FLAGS.patch_layer)
 
-		# total loss
-		with tf.name_scope("total_loss"):
-			total_loss_op = att_loss_op + loss_op
-		tf.summary.scalar('total_loss',total_loss_op)
+			# total loss
+			with tf.name_scope("total_loss"):
+				total_loss_op = att_loss_op + loss_op
+			tf.summary.scalar('total_loss',total_loss_op)
 
 		# Argmax Op to generate label from logits
 		with tf.name_scope("predicted_label"):
@@ -422,9 +448,14 @@ def train():
 			else:
 				sys.exit("Invalid optimizer");
 
-			train_op = optimizer.minimize(
-				loss = total_loss_op,
-				global_step=global_step)
+			if FLAGS.attention:
+				train_op = optimizer.minimize(
+					loss = total_loss_op,
+					global_step=global_step)
+			else:
+				train_op = optimizer.minimize(
+					loss = loss_op,
+					global_step=global_step)
 
 		# # epoch checkpoint manipulation
 		start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
@@ -473,23 +504,30 @@ def train():
 				while True:
 					try:
 						sess.run(tf.local_variables_initializer())
-						[image, label, distMap] = sess.run(next_element_train)
+						if FLAGS.attention:
+							[image, label, distMap] = sess.run(next_element_train)
+							distMap = distMap[:,:,:,:,np.newaxis]
+						else:
+							[image, label] = sess.run(next_element_train)
 
-						image = image[:,:,:,:,np.newaxis]
+						image = image[:,:,:,:,:]
 						label = label[:,:,:,:,np.newaxis]
-						distMap = distMap[:,:,:,:,np.newaxis]
 						
 						model.is_training = True;
-						train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
-						
-						print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
-						print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(loss)))
+						if FLAGS.attention:
+							train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
+							print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(loss)))
+						else:
+							train, summary, loss = sess.run([train_op, summary_op, loss_op], feed_dict={images_placeholder: image, labels_placeholder: label})
+							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
 
 						train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 						train_summary_writer.flush()
 
 					except tf.errors.OutOfRangeError:
 						start_epoch_inc.op.run()
+						model.is_training = False;
 						# print(start_epoch.eval())
 						# save the model at end of each epoch training
 						print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,FLAGS.checkpoint_dir))
@@ -507,14 +545,21 @@ def train():
 					while True:
 						try:
 							sess.run(tf.local_variables_initializer())
-							[image, label, distMap] = sess.run(next_element_test)
+							if FLAGS.attention:
+								[image, label, distMap] = sess.run(next_element_test)
+								distMap = distMap[:,:,:,:,np.newaxis]
+							else:
+								[image, label] = sess.run(next_element_test)
 
-							image = image[:,:,:,:,np.newaxis]
+							image = image[:,:,:,:,:]
 							label = label[:,:,:,:,np.newaxis]
-							distMap = distMap[:,:,:,:,np.newaxis]
 							
 							model.is_training = False;
-							loss, summary, loss, att_loss = sess.run([loss_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+							if FLAGS.attention:
+								loss, summary, att_loss = sess.run([loss_op, summary_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+							else:
+								loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
+
 							test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 							train_summary_writer.flush()
 

@@ -20,30 +20,40 @@ class NiftiDataset(object):
 
 	def __init__(self,
 		data_dir = '',
-		image_filename = '',
+		image_filenames = '',
 		label_filename = '',
 		transforms=None,
-		train=False):
+		train=False,
+		distmap=False):
 
 		# Init membership variables
 		self.data_dir = data_dir
-		self.image_filename = image_filename
+		self.image_filenames = image_filenames
 		self.label_filename = label_filename
 		self.transforms = transforms
 		self.train = train
+		self.distmap = distmap
 
 	def get_dataset(self):
 		image_paths = []
 		label_paths = []
 		for case in os.listdir(self.data_dir):
-			image_paths.append(os.path.join(self.data_dir,case,self.image_filename))
+			image_path_ = []
+			for image_channel in range(len(self.image_filenames)):
+				image_path_.append(os.path.join(self.image_filenames[image_channel]))
+			image_paths.append(image_path_)
 			label_paths.append(os.path.join(self.data_dir,case,self.label_filename))
 
 		dataset = tf.data.Dataset.from_tensor_slices((image_paths,label_paths))
 
-		dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
-			self.input_parser, [image_path, label_path], [tf.float32,tf.int32,tf.float32])),
-			num_parallel_calls=multiprocessing.cpu_count())
+		if self.distmap:
+			dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
+				self.input_parser, [image_path, label_path], [tf.float32,tf.int32,tf.float32])),
+				num_parallel_calls=multiprocessing.cpu_count())
+		else:
+			dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
+				self.input_parser, [image_path, label_path], [tf.float32,tf.int32])),
+				num_parallel_calls=multiprocessing.cpu_count())
 
 		self.dataset = dataset
 		self.data_size = len(image_paths)
@@ -56,11 +66,24 @@ class NiftiDataset(object):
 
 	def input_parser(self,image_path, label_path):
 		# read image and label
-		image = self.read_image(image_path.decode("utf-8"))
+		image = []
+		for image_channel in range(len(image_path)):
+			image_ = self.read_image(image_path[image_channel].decode("utf-8"))
+			image.append(image_)
+
 		# cast image and label
 		castImageFilter = sitk.CastImageFilter()
 		castImageFilter.SetOutputPixelType(sitk.sitkInt16)
-		image = castImageFilter.Execute(image)
+		for image_channel in range(len(image)):
+			image[image_channel] = castImageFilter.Execute(image[image_channel])
+			# check header same
+			sameSize = image[image_channel].GetSize() == image[0].GetSize()
+			sameSpacing = image[image_channel].GetSpacing() == image[0].GetSpacing()
+			sameDirection = image[image_channel].GetDirection() == image[0].GetDirection()
+			if sameSize and sameSpacing and sameDirection:
+				continue
+			else:
+				raise Exception('Header info inconsistent: {}'.format(image_path[image_channel]))
 
 		if self.train:
 			label = self.read_image(label_path.decode("utf-8"))
@@ -68,8 +91,8 @@ class NiftiDataset(object):
 			label = castImageFilter.Execute(label)
 		else:
 			label = sitk.Image(image.GetSize(),sitk.sitkInt8)
-			label.SetOrigin(image.GetOrigin())
-			label.SetSpacing(image.GetSpacing())
+			label.SetOrigin(image[0].GetOrigin())
+			label.SetSpacing(image[0].GetSpacing())
 
 		sample = {'image':image, 'label':label}
 
@@ -77,42 +100,50 @@ class NiftiDataset(object):
 			for transform in self.transforms:
 				sample = transform(sample)
 
-		# create distance map
-		distFilter = sitk.DanielssonDistanceMapImageFilter()
-		distFilter.SetInputIsBinary(True)
-		distFilter.SetUseImageSpacing(True)
-		distMap = distFilter.Execute(sample['label'])
-		multiFilter = sitk.MultiplyImageFilter()
-		distMap = multiFilter.Execute(distMap,-1)
+		if self.distmap:
+			# create distance map
+			distFilter = sitk.DanielssonDistanceMapImageFilter()
+			distFilter.SetInputIsBinary(True)
+			distFilter.SetUseImageSpacing(True)
+			distMap = distFilter.Execute(sample['label'])
+			multiFilter = sitk.MultiplyImageFilter()
+			distMap = multiFilter.Execute(distMap,-1)
 
-		divFilter = sitk.DivideImageFilter()
-		distMap = divFilter.Execute(distMap,2) # sigma of the attention distribution
-		powFilter = sitk.PowImageFilter()
-		distMap = powFilter.Execute(distMap,2)
-		expFilter = sitk.ExpNegativeImageFilter()
-		distMap = expFilter.Execute(distMap)
+			divFilter = sitk.DivideImageFilter()
+			distMap = divFilter.Execute(distMap,2) # sigma of the attention distribution
+			powFilter = sitk.PowImageFilter()
+			distMap = powFilter.Execute(distMap,2)
+			expFilter = sitk.ExpNegativeImageFilter()
+			distMap = expFilter.Execute(distMap)
 
-		# normalize data to 0-1
-		resacleFilter = sitk.RescaleIntensityImageFilter()
-		resacleFilter.SetOutputMaximum(1)
-		resacleFilter.SetOutputMinimum(0)
-		distMap = resacleFilter.Execute(distMap)
-
+			# normalize data to 0-1
+			resacleFilter = sitk.RescaleIntensityImageFilter()
+			resacleFilter.SetOutputMaximum(1)
+			resacleFilter.SetOutputMinimum(0)
+			distMap = resacleFilter.Execute(distMap)
+		
 		# convert sample to tf tensors
-		image_np = sitk.GetArrayFromImage(sample['image'])
+		for image_channel in range(len(sample['image'])):
+			image_np_ = sitk.GetArrayFromImage(sample['image'][image_channel])
+			image_np_ = np.asarray(image_np_,np.float32)
+			# to unify matrix dimension order between SimpleITK([x,y,z]) and numpy([z,y,x])
+			image_np_ = np.transpose(image_np_,(2,1,0))
+			if image_channel == 0:
+				image_np = image_np_[:,:,:,np.newaxis]
+			else:
+				image_np = np.append(image_np,image_np_[:,:,:,np.newaxis])
+			
 		label_np = sitk.GetArrayFromImage(sample['label'])
-		distMap_np = sitk.GetArrayFromImage(distMap)
-
-		image_np = np.asarray(image_np,np.float32)
 		label_np = np.asarray(label_np,np.int32)
-		distMap_np = np.asarray(distMap_np,np.float32)
-
-		# to unify matrix dimension order between SimpleITK([x,y,z]) and numpy([z,y,x])
-		image_np = np.transpose(image_np,(2,1,0))
 		label_np = np.transpose(label_np,(2,1,0))
-		distMap_np = np.transpose(distMap_np,(2,1,0))
 
-		return image_np, label_np, distMap_np
+		if self.distmap:
+			distMap_np = sitk.GetArrayFromImage(distMap)
+			distMap_np = np.asarray(distMap_np,np.float32)
+			distMap_np = np.transpose(distMap_np,(2,1,0))
+			return image_np, label_np, distMap_np
+		else:
+			return image_np, label_np
 
 class Normalization(object):
 	"""
@@ -146,16 +177,18 @@ class StatisticalNormalization(object):
 
 	def __call__(self, sample):
 		image, label = sample['image'], sample['label']
-		statisticsFilter = sitk.StatisticsImageFilter()
-		statisticsFilter.Execute(image)
 
-		intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
-		intensityWindowingFilter.SetOutputMaximum(255)
-		intensityWindowingFilter.SetOutputMinimum(0)
-		intensityWindowingFilter.SetWindowMaximum(statisticsFilter.GetMean()+self.sigma*statisticsFilter.GetSigma());
-		intensityWindowingFilter.SetWindowMinimum(statisticsFilter.GetMean()-self.sigma*statisticsFilter.GetSigma());
+		for image_channel in range(len(image)):
+			statisticsFilter = sitk.StatisticsImageFilter()
+			statisticsFilter.Execute(image[image_channel])
 
-		image = intensityWindowingFilter.Execute(image)
+			intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
+			intensityWindowingFilter.SetOutputMaximum(255)
+			intensityWindowingFilter.SetOutputMinimum(0)
+			intensityWindowingFilter.SetWindowMaximum(statisticsFilter.GetMean()+self.sigma*statisticsFilter.GetSigma());
+			intensityWindowingFilter.SetWindowMinimum(statisticsFilter.GetMean()-self.sigma*statisticsFilter.GetSigma());
+
+			image[image_channel] = intensityWindowingFilter.Execute(image[image_channel])
 
 		return {'image': image, 'label': label}
 
@@ -242,26 +275,27 @@ class Resample(object):
 	def __call__(self, sample):
 		image, label = sample['image'], sample['label']
 
-		old_spacing = image.GetSpacing()
-		old_size = image.GetSize()
+		for image_channel in range(len(image)):
+			old_spacing = image[image_channel].GetSpacing()
+			old_size = image[image_channel].GetSize()
 
-		new_spacing = self.voxel_size
+			new_spacing = self.voxel_size
 
-		new_size = []
-		for i in range(3):
-			new_size.append(int(math.ceil(old_spacing[i]*old_size[i]/new_spacing[i])))
-		new_size = tuple(new_size)
+			new_size = []
+			for i in range(3):
+				new_size.append(int(math.ceil(old_spacing[i]*old_size[i]/new_spacing[i])))
+			new_size = tuple(new_size)
 
-		resampler = sitk.ResampleImageFilter()
-		resampler.SetInterpolator(2)
-		resampler.SetOutputSpacing(new_spacing)
-		resampler.SetSize(new_size)
+			resampler = sitk.ResampleImageFilter()
+			resampler.SetInterpolator(2)
+			resampler.SetOutputSpacing(new_spacing)
+			resampler.SetSize(new_size)
 
-		# resample on image
-		resampler.SetOutputOrigin(image.GetOrigin())
-		resampler.SetOutputDirection(image.GetDirection())
-		# print("Resampling image...")
-		image = resampler.Execute(image)
+			# resample on image
+			resampler.SetOutputOrigin(image[image_channel].GetOrigin())
+			resampler.SetOutputDirection(image[image_channel].GetDirection())
+			# print("Resampling image...")
+			image[image_channel] = resampler.Execute(image[image_channel])
 
 		# resample on segmentation
 		resampler.SetInterpolator(sitk.sitkNearestNeighbor)
@@ -294,7 +328,8 @@ class Padding(object):
 
 	def __call__(self,sample):
 		image, label = sample['image'], sample['label']
-		size_old = image.GetSize()
+
+		size_old = image[0].GetSize()
 
 		if (size_old[0] >= self.output_size[0]) and (size_old[1] >= self.output_size[1]) and (size_old[2] >= self.output_size[2]):
 			return sample
@@ -309,15 +344,16 @@ class Padding(object):
 
 			output_size = tuple(output_size)
 
-			resampler = sitk.ResampleImageFilter()
-			resampler.SetOutputSpacing(image.GetSpacing())
-			resampler.SetSize(output_size)
+			for image_channel in range(len(image)):
+				resampler = sitk.ResampleImageFilter()
+				resampler.SetOutputSpacing(image[image_channel].GetSpacing())
+				resampler.SetSize(output_size)
 
-			# resample on image
-			resampler.SetInterpolator(2)
-			resampler.SetOutputOrigin(image.GetOrigin())
-			resampler.SetOutputDirection(image.GetDirection())
-			image = resampler.Execute(image)
+				# resample on image
+				resampler.SetInterpolator(2)
+				resampler.SetOutputOrigin(image[image_channel].GetOrigin())
+				resampler.SetOutputDirection(image[image_channel].GetDirection())
+				image[image_channel] = resampler.Execute(image[image_channel])
 
 			# resample on label
 			resampler.SetInterpolator(sitk.sitkNearestNeighbor)
@@ -426,7 +462,9 @@ class RandomNoise(object):
 
 		# print("Normalizing image...")
 		image, label = sample['image'], sample['label']
-		image = self.noiseFilter.Execute(image)
+
+		for image_channel in range(len(image)):
+			image[image_channel] = self.noiseFilter.Execute(image[image_channel])		
 
 		return {'image': image, 'label': label}
 
@@ -570,7 +608,7 @@ class ConfidenceCrop2(object):
 
 		if labelType == 0:
 			# randomly pick a region
-			croppedImage, croppedLabel = self.RandomEmptyRegion(image,label)
+			image, label = self.RandomEmptyRegion(image,label)
 		else:
 			# get the number of labels
 			ccFilter = sitk.ConnectedComponentImageFilter()
@@ -579,7 +617,7 @@ class ConfidenceCrop2(object):
 			labelShapeFilter.Execute(labelCC)
 
 			if labelShapeFilter.GetNumberOfLabels() == 0:
-				croppedImage, croppedLabel = self.RandomEmptyRegion(image,label)
+				image, label = self.RandomEmptyRegion(image,label)
 			else:
 				selectedLabel = random.choice(range(0,labelShapeFilter.GetNumberOfLabels())) + 1 
 				selectedBbox = labelShapeFilter.GetBoundingBox(selectedLabel)
@@ -594,10 +632,12 @@ class ConfidenceCrop2(object):
 				roiFilter = sitk.RegionOfInterestImageFilter()
 				roiFilter.SetSize(self.output_size)
 				roiFilter.SetIndex(index)
-				croppedImage = roiFilter.Execute(image)
-				croppedLabel = roiFilter.Execute(label)
 
-		return {'image': croppedImage, 'label': croppedLabel}
+				for image_channel in range(len(image)):
+					image[image_channel] = roiFilter.Execute(image[image_channel])
+				label = roiFilter.Execute(label)
+
+		return {'image': image, 'label': label}
 
 	def RandomEmptyRegion(self,image, label):
 		index = [0,0,0]
@@ -608,15 +648,16 @@ class ConfidenceCrop2(object):
 			roiFilter = sitk.RegionOfInterestImageFilter()
 			roiFilter.SetSize(self.output_size)
 			roiFilter.SetIndex(index)
-			croppedLabel = roiFilter.Execute(label)
+			label = roiFilter.Execute(label)
 			statFilter = sitk.StatisticsImageFilter()
-			statFilter.Execute(croppedLabel)
+			statFilter.Execute(roiFilter)
 
 			if statFilter.GetSum() < 1:
-				croppedImage = roiFilter.Execute(image)
+				for image_channel in range(len(image)):
+					image[image_channel] = roiFilter.Execute(image[image_channel])
 				contain_label = True
 				break
-		return croppedImage,croppedLabel
+		return image,roiFilter
 
 
 class BSplineDeformation(object):
