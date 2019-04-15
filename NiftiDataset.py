@@ -84,6 +84,7 @@ class NiftiDataset(object):
 				continue
 			else:
 				raise Exception('Header info inconsistent: {}'.format(image_path[image_channel]))
+				exit()
 
 		if self.train:
 			label = self.read_image(label_path.decode("utf-8"))
@@ -98,7 +99,11 @@ class NiftiDataset(object):
 
 		if self.transforms:
 			for transform in self.transforms:
-				sample = transform(sample)
+				try:
+					sample = transform(sample)
+				except:
+					print("Dataset preprocessing error: {}".format(os.path.dirname(image_path[0])))
+					exit()
 
 		if self.distmap:
 			# create distance map
@@ -648,12 +653,13 @@ class ConfidenceCrop2(object):
 			roiFilter = sitk.RegionOfInterestImageFilter()
 			roiFilter.SetSize(self.output_size)
 			roiFilter.SetIndex(index)
-			label = roiFilter.Execute(label)
+			label_ = roiFilter.Execute(label)
 			statFilter = sitk.StatisticsImageFilter()
-			statFilter.Execute(label)
+			statFilter.Execute(label_)
 
 			if statFilter.GetSum() < 1:
 				for image_channel in range(len(image)):
+					label = label_
 					image[image_channel] = roiFilter.Execute(image[image_channel])
 				contain_label = True
 				break

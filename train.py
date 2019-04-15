@@ -23,7 +23,7 @@ tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_integer('batch_size',2,
+tf.app.flags.DEFINE_integer('batch_size',32,
 	"""Size of batch""")           
 tf.app.flags.DEFINE_integer('patch_size',32,
 	"""Size of a data patch""")
@@ -65,7 +65,7 @@ tf.app.flags.DEFINE_float('momentum',0.5,
 	"""Momentum used in optimization""")
 tf.app.flags.DEFINE_bool('testing',True,
 	"""Perform testing after each epoch""")
-tf.app.flags.DEFINE_bool('attention',False,
+tf.app.flags.DEFINE_bool('attention',True,
 	"""Perform testing after each epoch""")
 
 # tf.app.flags.DEFINE_float('class_weight',0.15,
@@ -181,13 +181,13 @@ def train():
 			# plot images in tensorboard
 			for image_channel in range(input_channel_num):
 				images_log = tf.cast(images_placeholder[batch:batch+1,:,:,:,image_channel], dtype=tf.uint8)
-				tf.summary.image("image", tf.transpose(images_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
+				tf.summary.image(config['TrainingSetting']['Data']['ImageFilenames'][image_channel], tf.transpose(images_log,[3,1,2,0]),max_outputs=FLAGS.patch_layer)
 
-				if FLAGS.attention:
-					# dist map will be plot in color
-					distmap_log = grayscale_to_rainbow(tf.transpose(distmap_placeholder[batch:batch+1,:,:,:,image_channel],[3,1,2,0]))
-					distmap_log = tf.cast(tf.scalar_mul(255,distmap_log), dtype=tf.uint8)
-					tf.summary.image("distmap", distmap_log,max_outputs=FLAGS.patch_layer)
+			if FLAGS.attention:
+				# dist map will be plot in color
+				distmap_log = grayscale_to_rainbow(tf.transpose(distmap_placeholder[batch:batch+1,:,:,:,0],[3,1,2,0]))
+				distmap_log = tf.cast(tf.scalar_mul(255,distmap_log), dtype=tf.uint8)
+				tf.summary.image("distmap", distmap_log,max_outputs=FLAGS.patch_layer)
 
 			# plot labels
 			labels_log = tf.cast(tf.scalar_mul(255,labels_placeholder[batch:batch+1,:,:,:,0]), dtype=tf.uint8)
