@@ -368,13 +368,13 @@ def train():
 				loss_op = tf.reduce_mean(weighted_loss)
 			elif(FLAGS.loss_function == "sorensen"):
 				# Dice Similarity, currently only for binary segmentation, here we provide two calculation methods, first one is closer to classical dice formula
-				sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
-				# sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3,4])
+				# sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
+				sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3])
 				loss_op = 1. - sorensen
 			elif(FLAGS.loss_function == "jaccard"):
 				# Dice Similarity, currently only for binary segmentation, here we provide two calculation methods, first one is closer to classical dice formula
 				# jaccard = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='jaccard')
-				jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard', axis=[1,2,3,4])
+				jaccard = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='jaccard', axis=[1,2,3])
 				loss_op = 1. - jaccard
 		tf.summary.scalar('loss',loss_op)
 
