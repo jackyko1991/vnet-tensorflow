@@ -23,9 +23,9 @@ tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_integer('batch_size',2,
+tf.app.flags.DEFINE_integer('batch_size',10,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
@@ -33,7 +33,7 @@ tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-1,
 	"""Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',0.99,
 	"""Exponential decay learning rate factor""")
@@ -368,8 +368,8 @@ def train():
 				loss_op = tf.reduce_mean(weighted_loss)
 			elif(FLAGS.loss_function == "sorensen"):
 				# Dice Similarity, currently only for binary segmentation, here we provide two calculation methods, first one is closer to classical dice formula
-				# sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
-				sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3])
+				sorensen = dice_coe(tf.expand_dims(softmax_op[:,:,:,:,1],-1),tf.cast(labels_placeholder,dtype=tf.float32), loss_type='sorensen')
+				# sorensen = dice_coe(softmax_op,tf.cast(tf.one_hot(labels_placeholder[:,:,:,:,0],depth=2),dtype=tf.float32), loss_type='sorensen', axis=[1,2,3])
 				loss_op = 1. - sorensen
 			elif(FLAGS.loss_function == "jaccard"):
 				# Dice Similarity, currently only for binary segmentation, here we provide two calculation methods, first one is closer to classical dice formula
@@ -384,8 +384,10 @@ def train():
 				if (FLAGS.attention_loss_function == "l2"):
 					distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
 					distmap_1 = tf.squeeze(distmap_placeholder,axis=-1)
-					distmap = tf.stack([distmap_0,distmap_1],axis=-1)
-					att_loss_op_ = tf.square(softmax_attention-distmap)*100 # attention softmax and distmap are between 0 and 1, 100 is for regularization
+					# distmap = tf.stack([distmap_0,distmap_1],axis=-1)
+					# att_loss_op_ = tf.square(softmax_attention-distmap)*100 # attention softmax and distmap are between 0 and 1, 100 is for regularization
+					att_loss_op_  = tf.square(softmax_attention[:,:,:,:,1]-distmap_1)*100
+					att_loss_op_ = tf.expand_dims(att_loss_op_,axis=-1)
 					att_loss_op = tf.reduce_mean(att_loss_op_)
 				elif (FLAGS.attention_loss_function == "abs"):
 					distmap_0 = 1. - tf.squeeze(distmap_placeholder,axis=-1)
@@ -400,13 +402,13 @@ def train():
 			if FLAGS.image_log:
 				for batch in range(FLAGS.batch_size):
 					att_loss_log_0 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,0],[3,1,2,0]))
-					att_loss_log_1 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,1],[3,1,2,0]))
+					# att_loss_log_1 = grayscale_to_rainbow(tf.transpose(att_loss_op_[batch:batch+1,:,:,:,1],[3,1,2,0]))
 					att_loss_log_0 = tf.cast(tf.scalar_mul(255,att_loss_log_0), dtype=tf.uint8)
-					att_loss_log_1 = tf.cast(tf.scalar_mul(255,att_loss_log_1), dtype=tf.uint8)
+					# att_loss_log_1 = tf.cast(tf.scalar_mul(255,att_loss_log_1), dtype=tf.uint8)
 				   
 					# this two values is the same for binary classification
 					tf.summary.image("att_loss_0", att_loss_log_0,max_outputs=FLAGS.patch_layer)
-					tf.summary.image("att_loss_1", att_loss_log_1,max_outputs=FLAGS.patch_layer)
+					# tf.summary.image("att_loss_1", att_loss_log_1,max_outputs=FLAGS.patch_layer)
 
 			# total loss
 			with tf.name_scope("total_loss"):
