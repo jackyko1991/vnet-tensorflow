@@ -23,9 +23,9 @@ tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_integer('batch_size',10,
+tf.app.flags.DEFINE_integer('batch_size',3,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',64,
+tf.app.flags.DEFINE_integer('patch_size',128,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
@@ -207,7 +207,7 @@ def train():
 			trainTransforms = [
 				NiftiDataset.StatisticalNormalization(2.5),
 				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((0.75,0.75,0.75)),
+				NiftiDataset.Resample((0.75,0.75,2)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
@@ -235,7 +235,7 @@ def train():
 				testTransforms = [
 					NiftiDataset.StatisticalNormalization(2.5),
 					# NiftiDataset.Normalization(),
-					NiftiDataset.Resample((0.75,0.75,0.75)),
+					NiftiDataset.Resample((0.75,0.75,2)),
 					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
