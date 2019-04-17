@@ -19,13 +19,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
+tf.app.flags.DEFINE_string('data_dir', './data_SWAN',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_integer('batch_size',3,
+tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
@@ -63,7 +63,7 @@ tf.app.flags.DEFINE_string('optimizer','sgd',
 	"""Optimization method (sgd, adam, momentum, nesterov_momentum)""")
 tf.app.flags.DEFINE_float('momentum',0.5,
 	"""Momentum used in optimization""")
-tf.app.flags.DEFINE_bool('testing',False,
+tf.app.flags.DEFINE_bool('testing',True,
 	"""Perform testing after each epoch""")
 tf.app.flags.DEFINE_bool('attention',True,
 	"""Perform testing after each epoch""")
@@ -207,13 +207,13 @@ def train():
 			trainTransforms = [
 				NiftiDataset.StatisticalNormalization(2.5),
 				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((0.75,0.75,2)),
+				NiftiDataset.Resample((0.75,0.75,0.75)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
 				# NiftiDataset.BSplineDeformation(randomness=2),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.5)),
-				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=10,probability=0.7),
+				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.7),
 				NiftiDataset.RandomNoise()
 				]
 
@@ -235,13 +235,13 @@ def train():
 				testTransforms = [
 					NiftiDataset.StatisticalNormalization(2.5),
 					# NiftiDataset.Normalization(),
-					NiftiDataset.Resample((0.75,0.75,2)),
+					NiftiDataset.Resample((0.75,0.75,0.75)),
 					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 					# NiftiDataset.BSplineDeformation(),
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.75,0.75,0.75)),
-					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=10,probability=0.7),
+					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.7),
 					]
 
 				TestDataset = NiftiDataset.NiftiDataset(
@@ -526,7 +526,7 @@ def train():
 						if FLAGS.attention:
 							train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
 							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
-							print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(loss)))
+							print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(att_loss)))
 						else:
 							train, summary, loss = sess.run([train_op, summary_op, loss_op], feed_dict={images_placeholder: image, labels_placeholder: label})
 							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
@@ -590,11 +590,6 @@ def main(argv=None):
 		if tf.gfile.Exists(FLAGS.checkpoint_dir):
 			tf.gfile.DeleteRecursively(FLAGS.checkpoint_dir)
 		tf.gfile.MakeDirs(FLAGS.checkpoint_dir)
-
-		# # clear model directory
-		# if tf.gfile.Exists(FLAGS.model_dir):
-		#     tf.gfile.DeleteRecursively(FLGAS.model_dir)
-		# tf.gfile.MakeDirs(FLAGS.model_dir)
 
 	train()
 
