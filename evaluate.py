@@ -18,15 +18,15 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir','./data_lacunar/evaluate',
+tf.app.flags.DEFINE_string('data_dir','./data_SWAN/evaluate',
 	"""Directory of evaluation data""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-12411.meta',
+tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-11247.meta',
 	"""Path to saved models""")
-tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-12411',
+tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-11247',
 	"""Directory of saved checkpoints""")
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',32,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
@@ -216,14 +216,14 @@ def evaluate():
 
 			# convert label numpy back to sitk image
 			label_tfm = sitk.GetImageFromArray(label_np)
-			label_tfm.SetOrigin(image_tfm.GetOrigin())
-			label_tfm.SetDirection(image.GetDirection())
-			label_tfm.SetSpacing(image_tfm.GetSpacing())
+			label_tfm.SetOrigin(image_tfm[0].GetOrigin())
+			label_tfm.SetDirection(image_tfm[0].GetDirection())
+			label_tfm.SetSpacing(image_tfm[0].GetSpacing())
 
 			softmax_tfm = sitk.GetImageFromArray(softmax_np)
-			softmax_tfm.SetOrigin(image_tfm.GetOrigin())
-			softmax_tfm.SetDirection(image.GetDirection())
-			softmax_tfm.SetSpacing(image_tfm.GetSpacing())
+			softmax_tfm.SetOrigin(image_tfm[0].GetOrigin())
+			softmax_tfm.SetDirection(image_tfm[0].GetDirection())
+			softmax_tfm.SetSpacing(image_tfm[0].GetSpacing())
 
 			# resample the label back to original space
 			resampler = sitk.ResampleImageFilter()
@@ -231,10 +231,10 @@ def evaluate():
 			writer = sitk.ImageFileWriter()
 
 			resampler.SetInterpolator(1)
-			resampler.SetOutputSpacing(image.GetSpacing())
-			resampler.SetSize(image.GetSize())
-			resampler.SetOutputOrigin(image.GetOrigin())
-			resampler.SetOutputDirection(image.GetDirection())
+			resampler.SetOutputSpacing(image_tfm[0].GetSpacing())
+			resampler.SetSize(image_tfm[0].GetSize())
+			resampler.SetOutputOrigin(image_tfm[0].GetOrigin())
+			resampler.SetOutputDirection(image_tfm[0].GetDirection())
 			
 			print("{}: Resampling label back to original image space...".format(datetime.datetime.now()))
 			label = resampler.Execute(label_tfm)
