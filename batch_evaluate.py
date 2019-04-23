@@ -53,7 +53,8 @@ def Accuracy(gtName,outputName, tolerence=3):
 	gtLabelShapeFilter.Execute(groundTruth)
 	gtCentroids = []
 	for i in range(gtLabelShapeFilter.GetNumberOfLabels()):
-		gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
+		if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
+			gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
 
 	# locate the label centroid from output file
 	output = ccFilter.Execute(output)
@@ -61,7 +62,8 @@ def Accuracy(gtName,outputName, tolerence=3):
 	outputLabelShapeFilter.Execute(output)
 	outputCentroids = []
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
-		outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
+		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
+			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
 
 	# handle no label cases
 	if len(gtCentroids) == 0:
