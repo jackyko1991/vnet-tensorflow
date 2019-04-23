@@ -494,17 +494,17 @@ class ConfidenceCrop(object):
 
 		assert isinstance(output_size, (int, tuple))
 		if isinstance(output_size, int):
-		  self.output_size = (output_size, output_size, output_size)
+			self.output_size = (output_size, output_size, output_size)
 		else:
-		  assert len(output_size) == 3
-		  self.output_size = output_size
+			assert len(output_size) == 3
+			self.output_size = output_size
 
 		assert isinstance(sigma, (float, tuple))
 		if isinstance(sigma, float) and sigma >= 0:
-		  self.sigma = (sigma,sigma,sigma)
+			self.sigma = (sigma,sigma,sigma)
 		else:
-		  assert len(sigma) == 3
-		  self.sigma = sigma
+			assert len(sigma) == 3
+			self.sigma = sigma
 
 	def __call__(self,sample):
 		image, label = sample['image'], sample['label']
@@ -573,7 +573,7 @@ class ConfidenceCrop2(object):
 	probability (float): Probability to get positive labels
 	"""
 
-	def __init__(self, output_size, rand_range=3,probability=0.5):
+	def __init__(self, output_size, rand_range=3,probability=0.5, random_empty_region=False):
 		self.name = 'Confidence Crop 2'
 
 		assert isinstance(output_size, (int, tuple))
@@ -594,6 +594,9 @@ class ConfidenceCrop2(object):
 		if probability >= 0 and probability <= 1:
 			self.probability = probability
 
+		assert isinstance(random_empty_region, bool)
+		self.random_empty_region=random_empty_region
+
 	def __call__(self,sample):
 		image, label = sample['image'], sample['label']
 		size_new = self.output_size
@@ -613,7 +616,10 @@ class ConfidenceCrop2(object):
 
 		if labelType == 0:
 			# randomly pick a region
-			image, label = self.RandomEmptyRegion(image,label)
+			if self.random_empty_region:
+				image, label = self.RandomEmptyRegion(image,label)
+			else:
+				image, label = self.RandomRegion(image,label)
 		else:
 			# get the number of labels
 			ccFilter = sitk.ConnectedComponentImageFilter()
@@ -622,7 +628,10 @@ class ConfidenceCrop2(object):
 			labelShapeFilter.Execute(labelCC)
 
 			if labelShapeFilter.GetNumberOfLabels() == 0:
-				image, label = self.RandomEmptyRegion(image,label)
+				if self.random_empty_region:
+					image, label = self.RandomEmptyRegion(image,label)
+				else:
+					image, label = self.RandomRegion(image,label)
 			else:
 				selectedLabel = random.choice(range(0,labelShapeFilter.GetNumberOfLabels())) + 1 
 				selectedBbox = labelShapeFilter.GetBoundingBox(selectedLabel)
@@ -663,6 +672,20 @@ class ConfidenceCrop2(object):
 					image[image_channel] = roiFilter.Execute(image[image_channel])
 				contain_label = True
 				break
+		return image,label
+
+	def RandomRegion(self,image, label):
+		index = [0,0,0]
+		for i in range(3):
+			index[i] = random.choice(range(0,label.GetSize()[i]-self.output_size[i]-1))
+		roiFilter = sitk.RegionOfInterestImageFilter()
+		roiFilter.SetSize(self.output_size)
+		roiFilter.SetIndex(index)
+		label = roiFilter.Execute(label)
+
+		for image_channel in range(len(image)):
+			image[image_channel] = roiFilter.Execute(image[image_channel])
+			
 		return image,label
 
 
