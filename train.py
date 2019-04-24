@@ -33,7 +33,7 @@ tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',1e-4,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',1.0,
 	"""Exponential decay learning rate factor""")
@@ -528,7 +528,7 @@ def train():
 						
 						model.is_training = True;
 						if FLAGS.attention:
-							train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+							train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap, model.train_phase: True})
 							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
 							print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(att_loss)))
 						else:
@@ -568,7 +568,7 @@ def train():
 							
 							model.is_training = False;
 							if FLAGS.attention:
-								loss, summary, att_loss = sess.run([loss_op, summary_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap})
+								loss, summary, att_loss = sess.run([loss_op, summary_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap, model.train_phase: False})
 							else:
 								loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
 
