@@ -22,19 +22,19 @@ tf.app.flags.DEFINE_string('data_dir','./data_SWAN/evaluate',
 	"""Directory of evaluation data""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-11247.meta',
+tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-42918.meta',
 	"""Path to saved models""")
-tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-11247',
+tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-42918',
 	"""Directory of saved checkpoints""")
-tf.app.flags.DEFINE_integer('patch_size',32,
+tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',16,
+tf.app.flags.DEFINE_integer('patch_layer',64,
 	"""Number of layers in data patch""")
-tf.app.flags.DEFINE_integer('stride_inplane', 32,
+tf.app.flags.DEFINE_integer('stride_inplane', 64,
 	"""Stride size in 2D plane""")
-tf.app.flags.DEFINE_integer('stride_layer',16,
+tf.app.flags.DEFINE_integer('stride_layer',64,
 	"""Stride size in layer direction""")
-tf.app.flags.DEFINE_integer('batch_size',1,
+tf.app.flags.DEFINE_integer('batch_size',5,
 	"""Setting batch size (currently only accept 1)""")
 
 def prepare_batch(images,ijk_patch_indices):
@@ -194,7 +194,7 @@ def evaluate():
 			# acutal segmentation
 			for i in tqdm(range(len(batches))):
 				batch = batches[i]
-				[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={'images_placeholder:0': batch})
+				[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={'images_placeholder:0': batch, 'vnet/train_phase_placeholder:0': False})
 				istart = ijk_patch_indices[i][0][0]
 				iend = ijk_patch_indices[i][0][1]
 				jstart = ijk_patch_indices[i][0][2]
