@@ -27,15 +27,15 @@ tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
 tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',16,
+tf.app.flags.DEFINE_integer('patch_layer',64,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',1e-1,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-4,
 	"""Initial learning rate""")
-tf.app.flags.DEFINE_float('decay_factor',0.99,
+tf.app.flags.DEFINE_float('decay_factor',1.0,
 	"""Exponential decay learning rate factor""")
 tf.app.flags.DEFINE_integer('decay_steps',100,
 	"""Number of epoch before applying one learning rate decay""")
@@ -213,7 +213,7 @@ def train():
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
 				# NiftiDataset.BSplineDeformation(randomness=2),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.5)),
-				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.7),
+				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.5),
 				NiftiDataset.RandomNoise()
 				]
 
@@ -241,7 +241,7 @@ def train():
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 					# NiftiDataset.BSplineDeformation(),
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.75,0.75,0.75)),
-					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.7),
+					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.5),
 					]
 
 				TestDataset = NiftiDataset.NiftiDataset(
@@ -270,8 +270,8 @@ def train():
 				num_classes=2, # binary for 2
 				keep_prob=1.0, # default 1
 				num_channels=16, # default 16 
-				num_levels=4,  # default 4
-				num_convolutions=(1,2,3,3), # default (1,2,3,3), size should equal to num_levels
+				num_levels=3,  # default 4
+				num_convolutions=(1,2,2), # default (1,2,3,3), size should equal to num_levels
 				bottom_convolutions=3, # default 3
 				activation_fn="prelu") # default relu
 			logits_vnet = model.network_fn(images_placeholder)
@@ -465,6 +465,10 @@ def train():
 				train_op = optimizer.minimize(
 					loss = loss_op,
 					global_step=global_step)
+
+			# the update op is required by batch norm layer: https://www.tensorflow.org/api_docs/python/tf/layers/batch_normalization
+			update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+			train_op = tf.group([train_op, update_ops])
 
 		# # epoch checkpoint manipulation
 		start_epoch = tf.get_variable("start_epoch", shape=[1], initializer= tf.zeros_initializer,dtype=tf.int32)
