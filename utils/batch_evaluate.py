@@ -53,7 +53,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	gtLabelShapeFilter.Execute(groundTruth)
 	gtCentroids = []
 	for i in range(gtLabelShapeFilter.GetNumberOfLabels()):
-		if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
+		# if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
 			gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
 
 	# locate the label centroid from output file
@@ -62,7 +62,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	outputLabelShapeFilter.Execute(output)
 	outputCentroids = []
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
-		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
+		# if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
 			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
 
 	# handle no label cases
@@ -114,9 +114,9 @@ def main():
 		checkpoint_path = os.path.join(ckpt_dir,ckpt.split(".")[0])
 		checkpoint_num = int(ckpt.split(".")[0].split("-")[1])
 
-		if checkpoint_num < 30000:
+		if checkpoint_num < 42900 or checkpoint_num > 43000:
 			continue
-		command = "python ../evaluate.py " + \
+		command = "python ./evaluate.py " + \
 			"--data_dir " + dataDir + " " + \
 			"--model_path " + model_path +  " " +\
 			"--checkpoint_path " + checkpoint_path +  " " +\
