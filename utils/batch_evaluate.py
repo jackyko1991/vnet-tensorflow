@@ -101,7 +101,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 def main():
 	ckpt_dir = "./tmp/ckpt"
 	output_csv_dir = "./tmp/evalaution_result"
-	dataDir = "./data_SWAN/evaluate"
+	dataDir = "./data_lacunar/evaluate"
 	ckpts = os.listdir(ckpt_dir)
 
 	ckpts =  [x for x in ckpts if '.meta' in x]
@@ -114,9 +114,10 @@ def main():
 		checkpoint_path = os.path.join(ckpt_dir,ckpt.split(".")[0])
 		checkpoint_num = int(ckpt.split(".")[0].split("-")[1])
 
-		if checkpoint_num < 35000:
+		if checkpoint_num < 30000:
 			continue
-		command = "python evaluate.py " + \
+		command = "python ../evaluate.py " + \
+			"--data_dir " + dataDir + " " + \
 			"--model_path " + model_path +  " " +\
 			"--checkpoint_path " + checkpoint_path +  " " +\
 			"--batch_size " + str(5)
