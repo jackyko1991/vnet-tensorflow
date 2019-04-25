@@ -58,6 +58,7 @@ class OutputModule(object):
 			print("Invalid activation function")
 			exit()
 		self.keep_prob = keep_prob
+		self.train_phase = tf.placeholder(tf.bool,name="train_phase_placeholder")
 
 	def Conv3d_block(self, input_tensor, filterShape, strides = [1,1,1,1,1], is_training=True):
 		input_channels = int(input_tensor.get_shape()[-1])
@@ -84,10 +85,10 @@ class OutputModule(object):
 		input_tensor_padded = tf.pad(input_tensor, paddings, "CONSTANT")
 		input_channels = int(input_tensor.get_shape()[-1])
 		conv1Filter_shape = [3,3,3,input_channels,channels]
-		conv1 = self.ConvActivate3d_block(input_tensor_padded, conv1Filter_shape, is_training = self.is_training)
+		conv1 = self.ConvActivate3d_block(input_tensor_padded, conv1Filter_shape, is_training = is_training)
 		conv1 = tf.pad(conv1, paddings, "CONSTANT")
 		conv2Filter_shape = [3,3,3,channels,channels]
-		conv2 = self.Conv3d_block(conv1, conv2Filter_shape, is_training = self.is_training)
+		conv2 = self.Conv3d_block(conv1, conv2Filter_shape, is_training = is_training)
 
 		# residual branch
 		conv_up_W = init_weight([1,1,1,input_channels,channels])
@@ -103,12 +104,12 @@ class OutputModule(object):
 
 	def GetNetwork(self, input):
 		with tf.variable_scope('output/encoder'):
-			layer1_resblock1 = self.residual_block(input, self.num_channels, True, self.is_training)
-			layer1_resblock2 = self.residual_block(layer1_resblock1, self.num_channels, True, self.is_training)
-			layer1_resblock3 = self.residual_block(layer1_resblock2, self.num_channels, True, self.is_training)
+			layer1_resblock1 = self.residual_block(input, self.num_channels, True, self.train_phase)
+			layer1_resblock2 = self.residual_block(layer1_resblock1, self.num_channels, True, self.train_phase)
+			layer1_resblock3 = self.residual_block(layer1_resblock2, self.num_channels, True, self.train_phase)
 
 		with tf.variable_scope('output/output'):
-			logits = self.Conv3d_block(layer1_resblock3, [1, 1, 1, self.num_channels, self.num_classes])
+			logits = self.Conv3d_block(layer1_resblock3, [1, 1, 1, self.num_channels, self.num_classes], is_training=self.train_phase)
 
 		return logits
 

@@ -19,7 +19,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_SWAN',
+tf.app.flags.DEFINE_string('data_dir', './data_lacunar_small',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
@@ -33,7 +33,7 @@ tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-1,
 	"""Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',1.0,
 	"""Exponential decay learning rate factor""")
@@ -63,7 +63,7 @@ tf.app.flags.DEFINE_string('optimizer','sgd',
 	"""Optimization method (sgd, adam, momentum, nesterov_momentum)""")
 tf.app.flags.DEFINE_float('momentum',0.5,
 	"""Momentum used in optimization""")
-tf.app.flags.DEFINE_bool('testing',True,
+tf.app.flags.DEFINE_bool('testing',False,
 	"""Perform testing after each epoch""")
 tf.app.flags.DEFINE_bool('attention',True,
 	"""Perform testing after each epoch""")
@@ -270,8 +270,8 @@ def train():
 				num_classes=2, # binary for 2
 				keep_prob=1.0, # default 1
 				num_channels=16, # default 16 
-				num_levels=3,  # default 4
-				num_convolutions=(1,2,2), # default (1,2,3,3), size should equal to num_levels
+				num_levels=4,  # default 4
+				num_convolutions=(1,2,3,3), # default (1,2,3,3), size should equal to num_levels
 				bottom_convolutions=3, # default 3
 				activation_fn="prelu") # default relu
 			logits_vnet = model.network_fn(images_placeholder)
@@ -528,11 +528,22 @@ def train():
 						
 						model.is_training = True;
 						if FLAGS.attention:
-							train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap, model.train_phase: True})
+							train, summary, loss, att_loss = sess.run([train_op, summary_op, loss_op, att_loss_op], 
+								feed_dict={
+									images_placeholder: image, 
+									labels_placeholder: label, 
+									distmap_placeholder: distMap, 
+									model.train_phase: True, 
+									attentionModule.train_phase: True,
+									outputModule.train_phase: True})
 							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
 							print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(att_loss)))
 						else:
-							train, summary, loss = sess.run([train_op, summary_op, loss_op], feed_dict={images_placeholder: image, labels_placeholder: label})
+							train, summary, loss = sess.run([train_op, summary_op, loss_op], 
+								feed_dict={
+									images_placeholder: image, 
+									labels_placeholder: label,
+									model.train_phase: True})
 							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
 
 						train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
@@ -568,9 +579,20 @@ def train():
 							
 							model.is_training = False;
 							if FLAGS.attention:
-								loss, summary, att_loss = sess.run([loss_op, summary_op, att_loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, distmap_placeholder: distMap, model.train_phase: False})
+								loss, summary, att_loss = sess.run([loss_op, summary_op, att_loss_op], 
+									feed_dict={
+										images_placeholder: image, 
+										labels_placeholder: label, 
+										distmap_placeholder: distMap, 
+										model.train_phase: True, 
+										attentionModule.train_phase: True,
+										outputModule.train_phase: True})
 							else:
-								loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
+								loss, summary = sess.run([loss_op, summary_op], 
+									feed_dict={
+										images_placeholder: image, 
+										labels_placeholder: label,
+										model.train_phase: True})
 
 							test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 							train_summary_writer.flush()
