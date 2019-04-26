@@ -53,7 +53,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	gtLabelShapeFilter.Execute(groundTruth)
 	gtCentroids = []
 	for i in range(gtLabelShapeFilter.GetNumberOfLabels()):
-		if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
+		if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
 
 	# locate the label centroid from output file
@@ -62,7 +62,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	outputLabelShapeFilter.Execute(output)
 	outputCentroids = []
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
-		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
+		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
 
 	# handle no label cases
@@ -101,28 +101,33 @@ def Accuracy(gtName,outputName, tolerence=3):
 	return TP, FP, FN, dice, jaccard
 
 def main():
-	ckpt_dir = "./tmp/ckpt"
-	output_csv_dir = "./tmp/evalaution_result"
-	dataDir = "./data_lacunar/evaluate"
-	ckpts = os.listdir(ckpt_dir)
+	model_path = "./tmp/ckpt/checkpoint-76245.meta"
+	checkpoint_path = "./tmp/ckpt/checkpoint-76245"
+	output_csv_path = "./tmp/result_stride.csv"
+	dataDir = "./data_SWAN/evaluate"
 
-	ckpts =  [x for x in ckpts if '.meta' in x]
+	if os.path.exists(output_csv_path):
+		os.remove(output_csv_path)
 
-	if not os.path.exists(output_csv_dir):
-		os.makedirs(output_csv_dir)
+	max_stride = 30
+	min_stride = 20
+	step = 2
 
-	for ckpt in ckpts:
-		model_path = os.path.join(ckpt_dir,ckpt)
-		checkpoint_path = os.path.join(ckpt_dir,ckpt.split(".")[0])
-		checkpoint_num = int(ckpt.split(".")[0].split("-")[1])
+	csvfile = open(output_csv_path, 'w')
+	filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+	filewriter.writerow(['Stride', 'TP', 'FP', 'FN', 'Item Sensitivity', 'Item IoU', 'DICE', 'Jaccard'])
 
-		if checkpoint_num < 30000:
-			continue
+	for stride in range(min_stride,max_stride+1,step):
+		print("Evaluation with stride {}".format(stride))
+
 		command = "python ./evaluate.py " + \
 			"--data_dir " + dataDir + " " + \
 			"--model_path " + model_path +  " " +\
 			"--checkpoint_path " + checkpoint_path +  " " +\
-			"--batch_size " + str(5)
+			"--batch_size " + str(5) + " " +\
+			"--stride_inplane " + str(stride) + " " +\
+			"--stride_layer " + str(stride)
+
 		os.system(command)
 
 		# perform accuracy check
@@ -131,12 +136,6 @@ def main():
 		FN = 0
 		DICE = 0
 		Jaccard = 0
-
-		if os.path.exists(os.path.join(output_csv_dir,str(checkpoint_num)+".csv")):
-			os.remove(os.path.join(output_csv_dir,str(checkpoint_num)+".csv"))
-		csvfile = open(os.path.join(output_csv_dir,str(checkpoint_num)+".csv"), 'w')
-		filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-		filewriter.writerow(['Case', 'TP', 'FP', 'FN', 'Sensitivity', 'IoU', 'DICE', 'Jaccard'])
 
 		for case in os.listdir(dataDir):
 			if not os.path.exists(os.path.join(dataDir,case,"label_vnet.nii.gz")):
@@ -157,10 +156,8 @@ def main():
 				_iou = "nan"
 			else:
 				_iou = _TP/(_TP+_FP+_FN)
-			filewriter.writerow([case, _TP, _FP, _FN, _sensitivity, _iou, _DICE, _Jaccard])
 
-
-		print("Evaluation result of checkpoint {}:".format(ckpt))
+		print("Evaluation result of stride {}:".format(stride))
 		if (TP+FN) == 0:
 			avg_sensitivity = "nan"
 		else:
@@ -173,8 +170,8 @@ def main():
 		print("Average Sensitivity:", avg_sensitivity)
 		print("Average IoU:", avg_iou)
 
-		filewriter.writerow(["average", TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir))])
-		csvfile.close()
+		filewriter.writerow([stride, TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir))])
+	csvfile.close()
 
 if __name__=="__main__":
 	main()
