@@ -112,13 +112,15 @@ def evaluate():
 
 			# read image file
 			images = []
-			reader = sitk.ImageFileReader()
+			image_tfm = []
+			
 			for image_channel in range(input_channel_num):
+				reader = sitk.ImageFileReader()
 				reader.SetFileName(image_paths[image_channel])
-				images.append(reader.Execute())
-
-			# preprocess the image and label before inference
-			image_tfm = images
+				image = reader.Execute()
+				images.append(image)
+				# preprocess the image and label before inference
+				image_tfm.append(image)
 
 			# create empty label in pair with transformed image
 			label_tfm = sitk.Image(image_tfm[0].GetSize(),sitk.sitkUInt32)
@@ -214,15 +216,16 @@ def evaluate():
 			for i in tqdm(range(len(batches))):
 				batch = batches[i]
 				[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={'images_placeholder:0': batch, 'vnet/train_phase_placeholder:0': False})
-				istart = image_ijk_patch_indices_dicts[i]['indexes'][0][0]
-				iend = image_ijk_patch_indices_dicts[i]['indexes'][0][1]
-				jstart = image_ijk_patch_indices_dicts[i]['indexes'][0][2]
-				jend = image_ijk_patch_indices_dicts[i]['indexes'][0][3]
-				kstart = image_ijk_patch_indices_dicts[i]['indexes'][0][4]
-				kend = image_ijk_patch_indices_dicts[i]['indexes'][0][5]
-				label_np[istart:iend,jstart:jend,kstart:kend] += pred[0,:,:,:]
-				softmax_np[istart:iend,jstart:jend,kstart:kend] += softmax[0,:,:,:,1]
-				weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
+				for j in range(pred.shape[0]):
+					istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
+					iend = image_ijk_patch_indices_dicts[i]['indexes'][j][1]
+					jstart = image_ijk_patch_indices_dicts[i]['indexes'][j][2]
+					jend = image_ijk_patch_indices_dicts[i]['indexes'][j][3]
+					kstart = image_ijk_patch_indices_dicts[i]['indexes'][j][4]
+					kend = image_ijk_patch_indices_dicts[i]['indexes'][j][5]
+					label_np[istart:iend,jstart:jend,kstart:kend] += pred[j,:,:,:]
+					softmax_np[istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,1]
+					weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
 
 			print("{}: Evaluation complete".format(datetime.datetime.now()))
 			# eliminate overlapping region using the weighted value
