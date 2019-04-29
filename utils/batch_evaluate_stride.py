@@ -52,18 +52,33 @@ def Accuracy(gtName,outputName, tolerence=3):
 	gtLabelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
 	gtLabelShapeFilter.Execute(groundTruth)
 	gtCentroids = []
+	gt_vol_0 = 0
+	gt_vol_1 = 0
+
 	for i in range(gtLabelShapeFilter.GetNumberOfLabels()):
 		if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
+			if gtLabelShapeFilter.GetPhysicalSize(i+1) < math.pi*(2.5)**3*4/3:
+				gt_vol_0 += gtLabelShapeFilter.GetPhysicalSize(i+1)
+			else:
+				gt_vol_0 += gtLabelShapeFilter.GetPhysicalSize(i+1)
 
 	# locate the label centroid from output file
 	output = ccFilter.Execute(output)
 	outputLabelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
 	outputLabelShapeFilter.Execute(output)
 	outputCentroids = []
+
+	label_vol_0 = 0
+	label_vol_1 = 0
+
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
 		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
+			if outputLabelShapeFilter.GetPhysicalSize(i+1) < math.pi*(2.5)**3*4/3:
+				label_vol_0 += outputLabelShapeFilter.GetPhysicalSize(i+1)
+			else:
+				label_vol_1 += outputLabelShapeFilter.GetPhysicalSize(i+1)
 
 	# handle no label cases
 	if len(gtCentroids) == 0:
@@ -98,7 +113,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	print("IoU:", iouScore)
 	print("DICE:", dice)
 	print("Jaccard:", jaccard)
-	return TP, FP, FN, dice, jaccard
+	return TP, FP, FN, dice, jaccard, gt_vol_0, gt_vol_1, label_vol_0, label_vol_1
 
 def main():
 	model_path = "./tmp/ckpt/checkpoint-76245.meta"
@@ -109,13 +124,13 @@ def main():
 	if os.path.exists(output_csv_path):
 		os.remove(output_csv_path)
 
-	max_stride = 30
-	min_stride = 20
+	max_stride = 64
+	min_stride = 32
 	step = 2
 
 	csvfile = open(output_csv_path, 'w')
 	filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-	filewriter.writerow(['Stride', 'TP', 'FP', 'FN', 'Item Sensitivity', 'Item IoU', 'DICE', 'Jaccard'])
+	filewriter.writerow(['Stride', 'TP', 'FP', 'FN', 'Item Sensitivity', 'Item IoU', 'DICE', 'Jaccard', 'GT_vol<5mm', 'GT_vol>5mm', 'VNet_vol<5mm', 'VNet_vol>5mm'])
 
 	for stride in range(min_stride,max_stride+1,step):
 		print("Evaluation with stride {}".format(stride))
@@ -124,7 +139,7 @@ def main():
 			"--data_dir " + dataDir + " " + \
 			"--model_path " + model_path +  " " +\
 			"--checkpoint_path " + checkpoint_path +  " " +\
-			"--batch_size " + str(5) + " " +\
+			"--batch_size " + str(10) + " " +\
 			"--stride_inplane " + str(stride) + " " +\
 			"--stride_layer " + str(stride)
 
@@ -136,17 +151,26 @@ def main():
 		FN = 0
 		DICE = 0
 		Jaccard = 0
+		GT_vol_0 = 0
+		GT_vol_1 = 0
+		VNet_vol_0 = 0
+		VNet_vol_1 = 0
 
 		for case in os.listdir(dataDir):
 			if not os.path.exists(os.path.join(dataDir,case,"label_vnet.nii.gz")):
 				continue
 			print("case:",case)
-			_TP, _FP, _FN, _DICE, _Jaccard = Accuracy(os.path.join(dataDir,case,"label_crop.nii.gz"),os.path.join(dataDir,case,"label_vnet.nii.gz"))
+			_TP, _FP, _FN, _DICE, _Jaccard, _GT_vol_0, _GT_vol_1, _VNet_vol_0, _VNet_vol_1 = \
+				Accuracy(os.path.join(dataDir,case,"label_crop.nii.gz"),os.path.join(dataDir,case,"label_vnet.nii.gz"))
 			TP += _TP
 			FP += _FP
 			FN += _FN
 			DICE += _DICE
 			Jaccard += _Jaccard
+			GT_vol_0 += _GT_vol_0
+			GT_vol_1 += _GT_vol_1
+			VNet_vol_0 += _VNet_vol_0
+			VNet_vol_1 += _VNet_vol_1
 
 			if (_TP+_FN) == 0:
 				_sensitivity = "nan"
@@ -170,7 +194,8 @@ def main():
 		print("Average Sensitivity:", avg_sensitivity)
 		print("Average IoU:", avg_iou)
 
-		filewriter.writerow([stride, TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir))])
+		filewriter.writerow([stride, TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir)),\
+			GT_vol_0, GT_vol_1, VNet_vol_0, VNet_vol_1])
 	csvfile.close()
 
 if __name__=="__main__":
