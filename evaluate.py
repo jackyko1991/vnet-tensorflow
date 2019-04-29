@@ -11,6 +11,7 @@ import math
 import numpy as np
 from tqdm import tqdm
 import json
+import multiprocessing
 
 # select gpu devices
 os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2" 
@@ -22,33 +23,43 @@ tf.app.flags.DEFINE_string('data_dir','./data_SWAN/evaluate',
 	"""Directory of evaluation data""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-42918.meta',
+tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-76245.meta',
 	"""Path to saved models""")
-tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-42918',
+tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-76245',
 	"""Directory of saved checkpoints""")
 tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',64,
 	"""Number of layers in data patch""")
-tf.app.flags.DEFINE_integer('stride_inplane', 64,
+tf.app.flags.DEFINE_integer('stride_inplane', 32,
 	"""Stride size in 2D plane""")
-tf.app.flags.DEFINE_integer('stride_layer',64,
+tf.app.flags.DEFINE_integer('stride_layer',32,
 	"""Stride size in layer direction""")
 tf.app.flags.DEFINE_integer('batch_size',5,
 	"""Setting batch size (currently only accept 1)""")
 
-def prepare_batch(images,ijk_patch_indices):
-	image_batches = []
-	for batch in ijk_patch_indices:
-		image_batch = []
-		for patch in batch:
-			image_patch = images[patch[0]:patch[1],patch[2]:patch[3],patch[4]:patch[5],:]
-			image_batch.append(image_patch)
+def prepare_batch(image_ijk_patch_indices_dict):
+	# image_batches = []
+	# for batch in ijk_patch_indices:
+	# 	image_batch = []
+	# 	for patch in batch:
+	# 		image_patch = images[patch[0]:patch[1],patch[2]:patch[3],patch[4]:patch[5],:]
+	# 		image_batch.append(image_patch)
 
-		image_batch = np.asarray(image_batch)
-		image_batches.append(image_batch)
+	# 	image_batch = np.asarray(image_batch)
+	# 	image_batches.append(image_batch)
+	
+	images, ijk_patch_indices = image_ijk_patch_indices_dict['images'], image_ijk_patch_indices_dict['indexes']
+
+	# return image_batches
+	image_batch = []
+	for patch in ijk_patch_indices:
+		image_patch = images[patch[0]:patch[1],patch[2]:patch[3],patch[4]:patch[5],:]
+		image_batch.append(image_patch)
+
+	image_batch = np.asarray(image_batch)
 		
-	return image_batches
+	return image_batch
 
 def evaluate():
 	"""evaluate the vnet model by stepwise moving along the 3D image"""
@@ -158,7 +169,7 @@ def evaluate():
 			knum = int(math.ceil((images_np.shape[2]-FLAGS.patch_layer)/float(FLAGS.stride_layer))) + 1
 
 			patch_total = 0
-			ijk_patch_indices = []
+			image_ijk_patch_indices_dicts = []
 			ijk_patch_indicies_tmp = []
 
 			for i in range(inum):
@@ -185,22 +196,30 @@ def evaluate():
 						ijk_patch_indicies_tmp.append([istart, iend, jstart, jend, kstart, kend])
 
 						if patch_total % FLAGS.batch_size == 0:
-							ijk_patch_indices.append(ijk_patch_indicies_tmp)
+							image_ijk_patch_indices_dicts.append({'images': images_np, 'indexes':ijk_patch_indicies_tmp})
 
 						patch_total += 1
 			
-			batches = prepare_batch(images_np,ijk_patch_indices)
+			# for last batch
+			image_ijk_patch_indices_dicts.append({'images': images_np, 'indexes':ijk_patch_indicies_tmp})
+
+			p = multiprocessing.Pool(multiprocessing.cpu_count())
+			batches = p.map(prepare_batch,image_ijk_patch_indices_dicts)
+			p.close()
+			p.join()
+
+			# batches = prepare_batch(images_np,ijk_patch_indices)
 
 			# acutal segmentation
 			for i in tqdm(range(len(batches))):
 				batch = batches[i]
 				[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={'images_placeholder:0': batch, 'vnet/train_phase_placeholder:0': False})
-				istart = ijk_patch_indices[i][0][0]
-				iend = ijk_patch_indices[i][0][1]
-				jstart = ijk_patch_indices[i][0][2]
-				jend = ijk_patch_indices[i][0][3]
-				kstart = ijk_patch_indices[i][0][4]
-				kend = ijk_patch_indices[i][0][5]
+				istart = image_ijk_patch_indices_dicts[i]['indexes'][0][0]
+				iend = image_ijk_patch_indices_dicts[i]['indexes'][0][1]
+				jstart = image_ijk_patch_indices_dicts[i]['indexes'][0][2]
+				jend = image_ijk_patch_indices_dicts[i]['indexes'][0][3]
+				kstart = image_ijk_patch_indices_dicts[i]['indexes'][0][4]
+				kend = image_ijk_patch_indices_dicts[i]['indexes'][0][5]
 				label_np[istart:iend,jstart:jend,kstart:kend] += pred[0,:,:,:]
 				softmax_np[istart:iend,jstart:jend,kstart:kend] += softmax[0,:,:,:,1]
 				weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
