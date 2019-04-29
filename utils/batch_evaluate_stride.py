@@ -61,7 +61,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 			if gtLabelShapeFilter.GetPhysicalSize(i+1) < math.pi*(2.5)**3*4/3:
 				gt_vol_0 += gtLabelShapeFilter.GetPhysicalSize(i+1)
 			else:
-				gt_vol_0 += gtLabelShapeFilter.GetPhysicalSize(i+1)
+				gt_vol_1 += gtLabelShapeFilter.GetPhysicalSize(i+1)
 
 	# locate the label centroid from output file
 	output = ccFilter.Execute(output)
@@ -200,5 +200,3 @@ def main():
 
 if __name__=="__main__":
 	main()
-
-	
