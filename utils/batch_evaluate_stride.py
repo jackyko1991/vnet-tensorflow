@@ -24,7 +24,7 @@ def overlapMeasure(imageA, imageB, method="dice"):
 	else:
 		return 0
 
-def Accuracy(gtName,outputName, tolerence=3, thicknessThreshold=6):
+def Accuracy(gtName,outputName, tolerence=2, thicknessThreshold=6):
 	reader = sitk.ImageFileReader()
 	reader.SetFileName(gtName)
 	groundTruth = reader.Execute()
@@ -56,7 +56,7 @@ def Accuracy(gtName,outputName, tolerence=3, thicknessThreshold=6):
 	gt_vol_1 = 0
 
 	for i in range(gtLabelShapeFilter.GetNumberOfLabels()):
-		gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
+		# gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
 		if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
 			if gtLabelShapeFilter.GetPhysicalSize(i+1) < math.pi*(2.5)**3*4/3:
@@ -108,6 +108,7 @@ def Accuracy(gtName,outputName, tolerence=3, thicknessThreshold=6):
 	iouScore = TP/(TP+len(outputCentroids)-TP+FN)
 	FP = len(outputCentroids)-TP
 
+	print(len(outputCentroids))
 	print("TP:",TP)
 	print("FP:",FP)
 	print("TN:",0)
@@ -125,7 +126,7 @@ def main():
 	dataDir = "./data_SWAN/evaluate"
 
 	max_stride = 64
-	min_stride = 30
+	min_stride = 64
 	step = 2
 
 	for stride in range(min_stride,max_stride+1,step):
@@ -147,7 +148,7 @@ def main():
 			"--stride_inplane " + str(stride) + " " +\
 			"--stride_layer " + str(stride)
 
-		os.system(command)
+		# os.system(command)
 
 		# perform accuracy check
 		TP = 0
