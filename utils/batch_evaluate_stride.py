@@ -24,7 +24,7 @@ def overlapMeasure(imageA, imageB, method="dice"):
 	else:
 		return 0
 
-def Accuracy(gtName,outputName, tolerence=3):
+def Accuracy(gtName,outputName, tolerence=3, thicknessThreshold=6):
 	reader = sitk.ImageFileReader()
 	reader.SetFileName(gtName)
 	groundTruth = reader.Execute()
@@ -74,7 +74,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	label_vol_1 = 0
 
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
-		if outputLabelShapeFilter.GetBoundingBox(i+1)[5] < 6:
+		if outputLabelShapeFilter.GetBoundingBox(i+1)[5] < thicknessThreshold:
 			continue
 		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
@@ -125,7 +125,7 @@ def main():
 	dataDir = "./data_SWAN/evaluate"
 
 	max_stride = 64
-	min_stride = 64
+	min_stride = 30
 	step = 2
 
 	for stride in range(min_stride,max_stride+1,step):
@@ -147,7 +147,7 @@ def main():
 			"--stride_inplane " + str(stride) + " " +\
 			"--stride_layer " + str(stride)
 
-		# os.system(command)
+		os.system(command)
 
 		# perform accuracy check
 		TP = 0
@@ -201,7 +201,7 @@ def main():
 		print("Average Sensitivity:", avg_sensitivity)
 		print("Average IoU:", avg_iou)
 
-		filewriter.writerow([str(stride) + " avg",TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir)),\
+		filewriter.writerow(["result "+str(stride),TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir)),\
 		GT_vol_0, GT_vol_1, VNet_vol_0, VNet_vol_1])
 
 	csvfile.close()
