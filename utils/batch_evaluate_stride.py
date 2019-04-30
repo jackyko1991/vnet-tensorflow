@@ -126,7 +126,7 @@ def main():
 	dataDir = "./data_SWAN/evaluate"
 
 	max_stride = 64
-	min_stride = 64
+	min_stride = 30
 	step = 2
 
 	for stride in range(min_stride,max_stride+1,step):
@@ -148,7 +148,7 @@ def main():
 			"--stride_inplane " + str(stride) + " " +\
 			"--stride_layer " + str(stride)
 
-		# os.system(command)
+		os.system(command)
 
 		# perform accuracy check
 		TP = 0
