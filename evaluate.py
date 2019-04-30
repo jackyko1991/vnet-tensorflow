@@ -60,7 +60,7 @@ def evaluate():
     transforms = [
         # NiftiDataset.Normalization(),
         NiftiDataset.StatisticalNormalization(2.5),
-        NiftiDataset.Resample(0.25),
+        NiftiDataset.Resample(0.75),
         NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer))      
         ]
 
