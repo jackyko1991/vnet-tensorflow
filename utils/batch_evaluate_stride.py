@@ -56,6 +56,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	gt_vol_1 = 0
 
 	for i in range(gtLabelShapeFilter.GetNumberOfLabels()):
+		gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
 		if gtLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			gtCentroids.append(gtLabelShapeFilter.GetCentroid(i+1))
 			if gtLabelShapeFilter.GetPhysicalSize(i+1) < math.pi*(2.5)**3*4/3:
@@ -73,6 +74,8 @@ def Accuracy(gtName,outputName, tolerence=3):
 	label_vol_1 = 0
 
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
+		if labelShapeFilter.GetBoundingBox(i+1)[5] < 6:
+			continue
 		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
 			if outputLabelShapeFilter.GetPhysicalSize(i+1) < math.pi*(2.5)**3*4/3:
@@ -113,7 +116,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	print("IoU:", iouScore)
 	print("DICE:", dice)
 	print("Jaccard:", jaccard)
-	return TP, FP, FN, dice, jaccard, gt_vol_0, gt_vol_1, label_vol_0, label_vol_1
+	return TP, FP, FN, dice, jaccard
 
 def main():
 	model_path = "./tmp/ckpt/checkpoint-76245.meta"
@@ -125,12 +128,12 @@ def main():
 		os.remove(output_csv_path)
 
 	max_stride = 64
-	min_stride = 32
+	min_stride = 64
 	step = 2
 
 	csvfile = open(output_csv_path, 'w')
 	filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-	filewriter.writerow(['Stride', 'TP', 'FP', 'FN', 'Item Sensitivity', 'Item IoU', 'DICE', 'Jaccard', 'GT_vol<5mm', 'GT_vol>5mm', 'VNet_vol<5mm', 'VNet_vol>5mm'])
+	filewriter.writerow(['Stride', 'Case', 'TP', 'FP', 'FN', 'Item Sensitivity', 'Item IoU', 'DICE', 'Jaccard', 'GT_vol<5mm', 'GT_vol>5mm', 'VNet_vol<5mm', 'VNet_vol>5mm'])
 
 	for stride in range(min_stride,max_stride+1,step):
 		print("Evaluation with stride {}".format(stride))
@@ -181,6 +184,9 @@ def main():
 			else:
 				_iou = _TP/(_TP+_FP+_FN)
 
+			filewriter.writerow([stride, case,TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir)),\
+			GT_vol_0, GT_vol_1, VNet_vol_0, VNet_vol_1])
+
 		print("Evaluation result of stride {}:".format(stride))
 		if (TP+FN) == 0:
 			avg_sensitivity = "nan"
@@ -194,8 +200,6 @@ def main():
 		print("Average Sensitivity:", avg_sensitivity)
 		print("Average IoU:", avg_iou)
 
-		filewriter.writerow([stride, TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir)),\
-			GT_vol_0, GT_vol_1, VNet_vol_0, VNet_vol_1])
 	csvfile.close()
 
 if __name__=="__main__":

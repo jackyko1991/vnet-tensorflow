@@ -63,6 +63,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	outputCentroids = []
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
 		# if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1.5)**3*4/3:
+		if labelShapeFilter.GetBoundingBox(i+1)[5] >= 6:
 			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
 
 	# handle no label cases
