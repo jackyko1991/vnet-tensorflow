@@ -74,7 +74,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 	label_vol_1 = 0
 
 	for i in range(outputLabelShapeFilter.GetNumberOfLabels()):
-		if labelShapeFilter.GetBoundingBox(i+1)[5] < 6:
+		if outputLabelShapeFilter.GetBoundingBox(i+1)[5] < 6:
 			continue
 		if outputLabelShapeFilter.GetPhysicalSize(i+1) >= math.pi*(1)**3*4/3:
 			outputCentroids.append(outputLabelShapeFilter.GetCentroid(i+1))
@@ -85,7 +85,7 @@ def Accuracy(gtName,outputName, tolerence=3):
 
 	# handle no label cases
 	if len(gtCentroids) == 0:
-		return 0, len(outputCentroids), 0, 0, 0
+		return 0, len(outputCentroids), 0, 0, 0, 0,0,0,0
 
 	TP = 0
 	FN = 0
@@ -116,27 +116,28 @@ def Accuracy(gtName,outputName, tolerence=3):
 	print("IoU:", iouScore)
 	print("DICE:", dice)
 	print("Jaccard:", jaccard)
-	return TP, FP, FN, dice, jaccard
+	return TP, FP, FN, dice, jaccard, gt_vol_0, gt_vol_1, label_vol_0, label_vol_1
 
 def main():
 	model_path = "./tmp/ckpt/checkpoint-76245.meta"
 	checkpoint_path = "./tmp/ckpt/checkpoint-76245"
-	output_csv_path = "./tmp/result_stride.csv"
+	output_csv_folder = "./tmp"
 	dataDir = "./data_SWAN/evaluate"
-
-	if os.path.exists(output_csv_path):
-		os.remove(output_csv_path)
 
 	max_stride = 64
 	min_stride = 64
 	step = 2
 
-	csvfile = open(output_csv_path, 'w')
-	filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-	filewriter.writerow(['Stride', 'Case', 'TP', 'FP', 'FN', 'Item Sensitivity', 'Item IoU', 'DICE', 'Jaccard', 'GT_vol<5mm', 'GT_vol>5mm', 'VNet_vol<5mm', 'VNet_vol>5mm'])
-
 	for stride in range(min_stride,max_stride+1,step):
 		print("Evaluation with stride {}".format(stride))
+		output_csv_path = os.path.join(output_csv_folder,"result_stride_" + str(stride) + ".csv")
+
+		if os.path.exists(output_csv_path):
+			os.remove(output_csv_path)
+
+		csvfile = open(output_csv_path, 'w')
+		filewriter = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+		filewriter.writerow(['Case', 'TP', 'FP', 'FN', 'Item Sensitivity', 'Item IoU', 'DICE', 'Jaccard', 'GT_vol<5mm', 'GT_vol>5mm', 'VNet_vol<5mm', 'VNet_vol>5mm'])
 
 		command = "python ./evaluate.py " + \
 			"--data_dir " + dataDir + " " + \
@@ -146,7 +147,7 @@ def main():
 			"--stride_inplane " + str(stride) + " " +\
 			"--stride_layer " + str(stride)
 
-		os.system(command)
+		# os.system(command)
 
 		# perform accuracy check
 		TP = 0
@@ -184,8 +185,8 @@ def main():
 			else:
 				_iou = _TP/(_TP+_FP+_FN)
 
-			filewriter.writerow([stride, case,TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir)),\
-			GT_vol_0, GT_vol_1, VNet_vol_0, VNet_vol_1])
+			filewriter.writerow([case,_TP, _FP, _FN, _sensitivity, _iou, _DICE, _Jaccard,\
+			_GT_vol_0, _GT_vol_1, _VNet_vol_0, _VNet_vol_1])
 
 		print("Evaluation result of stride {}:".format(stride))
 		if (TP+FN) == 0:
@@ -199,6 +200,9 @@ def main():
 
 		print("Average Sensitivity:", avg_sensitivity)
 		print("Average IoU:", avg_iou)
+
+		filewriter.writerow([str(stride) + " avg",TP, FP, FN, avg_sensitivity, avg_iou, DICE/len(os.listdir(dataDir)), Jaccard/len(os.listdir(dataDir)),\
+		GT_vol_0, GT_vol_1, VNet_vol_0, VNet_vol_1])
 
 	csvfile.close()
 
