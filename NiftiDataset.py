@@ -202,14 +202,14 @@ class ManualNormalization(object):
 	Normalize an image by mapping intensity with given max and min window level
 	"""
 
-	def _init_(self,windowMin, windowMax):
+	def __init__(self,windowMin, windowMax):
 		self.name = 'ManualNormalization'
 		assert isinstance(windowMax, (int,float))
 		assert isinstance(windowMin, (int,float))
 		self.windowMax = windowMax
 		self.windowMin = windowMin
 
-	def _call_(self, sample):
+	def __call__(self, sample):
 		image, label = sample['image'], sample['label']
 		intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
 		intensityWindowingFilter.SetOutputMaximum(255)
