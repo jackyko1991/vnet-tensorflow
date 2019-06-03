@@ -23,17 +23,17 @@ tf.app.flags.DEFINE_string('data_dir','./data_SWAN/evaluate',
 	"""Directory of evaluation data""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-76245.meta',
+tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-25185.meta',
 	"""Path to saved models""")
-tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-76245',
+tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-25185',
 	"""Directory of saved checkpoints""")
 tf.app.flags.DEFINE_integer('patch_size',64,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',64,
 	"""Number of layers in data patch""")
-tf.app.flags.DEFINE_integer('stride_inplane', 32,
+tf.app.flags.DEFINE_integer('stride_inplane', 48,
 	"""Stride size in 2D plane""")
-tf.app.flags.DEFINE_integer('stride_layer',32,
+tf.app.flags.DEFINE_integer('stride_layer',48,
 	"""Stride size in layer direction""")
 tf.app.flags.DEFINE_integer('batch_size',5,
 	"""Setting batch size (currently only accept 1)""")
@@ -77,8 +77,8 @@ def evaluate():
 	transforms = [  
 		NiftiDataset.StatisticalNormalization(2.5),
 		# NiftiDataset.Normalization(),
-		NiftiDataset.Resample((0.75,0.75,0.75)),
-		 NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
+		NiftiDataset.Resample((0.4,0.4,0.4)),
+		NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 		]
 
 	config = tf.ConfigProto()
@@ -253,10 +253,10 @@ def evaluate():
 			writer = sitk.ImageFileWriter()
 
 			resampler.SetInterpolator(1)
-			resampler.SetOutputSpacing(image_tfm[0].GetSpacing())
-			resampler.SetSize(image_tfm[0].GetSize())
-			resampler.SetOutputOrigin(image_tfm[0].GetOrigin())
-			resampler.SetOutputDirection(image_tfm[0].GetDirection())
+			resampler.SetOutputSpacing(images[0].GetSpacing())
+			resampler.SetSize(images[0].GetSize())
+			resampler.SetOutputOrigin(images[0].GetOrigin())
+			resampler.SetOutputDirection(images[0].GetDirection())
 			
 			print("{}: Resampling label back to original image space...".format(datetime.datetime.now()))
 			label = resampler.Execute(label_tfm)
