@@ -19,7 +19,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_lacunar_small',
+tf.app.flags.DEFINE_string('data_dir', './data_WML',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
@@ -207,7 +207,7 @@ def train():
 			trainTransforms = [
 				NiftiDataset.StatisticalNormalization(2.5),
 				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((0.75,0.75,0.75)),
+				NiftiDataset.Resample((1,1,1)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
@@ -235,7 +235,7 @@ def train():
 				testTransforms = [
 					NiftiDataset.StatisticalNormalization(2.5),
 					# NiftiDataset.Normalization(),
-					NiftiDataset.Resample((0.75,0.75,0.75)),
+					NiftiDataset.Resample((1,1,1)),
 					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
@@ -270,8 +270,8 @@ def train():
 				num_classes=2, # binary for 2
 				keep_prob=1.0, # default 1
 				num_channels=16, # default 16 
-				num_levels=4,  # default 4
-				num_convolutions=(1,2,3,3), # default (1,2,3,3), size should equal to num_levels
+				num_levels=3,  # default 4
+				num_convolutions=(1,2,2), # default (1,2,3,3), size should equal to num_levels
 				bottom_convolutions=3, # default 3
 				activation_fn="prelu") # default relu
 			logits_vnet = model.network_fn(images_placeholder)
@@ -534,16 +534,12 @@ def train():
 									labels_placeholder: label, 
 									distmap_placeholder: distMap, 
 									model.train_phase: True, 
-									attentionModule.train_phase: True,
-									outputModule.train_phase: True})
+									attentionModule.train_phase: False, 
+									outputModule.train_phase: False})
 							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
 							print('{}: Training attention loss: {}'.format(datetime.datetime.now(), str(att_loss)))
 						else:
-							train, summary, loss = sess.run([train_op, summary_op, loss_op], 
-								feed_dict={
-									images_placeholder: image, 
-									labels_placeholder: label,
-									model.train_phase: True})
+							train, summary, loss = sess.run([train_op, summary_op, loss_op], feed_dict={images_placeholder: image, labels_placeholder: label, model.train_phase: True})
 							print('{}: Training dice loss: {}'.format(datetime.datetime.now(), str(loss)))
 
 						train_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
@@ -584,15 +580,11 @@ def train():
 										images_placeholder: image, 
 										labels_placeholder: label, 
 										distmap_placeholder: distMap, 
-										model.train_phase: True, 
-										attentionModule.train_phase: True,
-										outputModule.train_phase: True})
+										model.train_phase: False, 
+										attentionModule.train_phase: False, 
+										outputModule.train_phase: False})
 							else:
-								loss, summary = sess.run([loss_op, summary_op], 
-									feed_dict={
-										images_placeholder: image, 
-										labels_placeholder: label,
-										model.train_phase: True})
+								loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
 
 							test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 							train_summary_writer.flush()
