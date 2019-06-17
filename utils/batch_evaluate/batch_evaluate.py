@@ -10,9 +10,9 @@ class Batch_Evaluate:
 		stride_min=30,
 		stride_max=64,
 		step=2,
-		checkpoint_min=70000,
+		checkpoint_min=1,
 		checkpoint_max=9999999999999999999999999,
-		batch_size=10):
+		batch_size=5):
 		self.model_folder = model_folder
 		self.output_folder = output_folder
 		self.data_folder = data_folder
@@ -32,6 +32,8 @@ class Batch_Evaluate:
 		assert isinstance(checkpoint_max, int)
 		assert checkpoint_max > 0
 		self.checkpoint_max = checkpoint_max
+
+		self.batch_size = batch_size
 
 	@property
 	def model_folder(self):
@@ -72,7 +74,7 @@ class Batch_Evaluate:
 
 		for ckpt in ckpts:
 			model_path = os.path.join(self._model_folder,ckpt)
-			checkpoint_path = os.path.join(ckpt_dir,ckpt.split(".")[0])
+			checkpoint_path = os.path.join(self._model_folder,ckpt.split(".")[0])
 			checkpoint_num = int(ckpt.split(".")[0].split("-")[1])
 
 			if checkpoint_num < self.checkpoint_min or checkpoint_num > self.checkpoint_max:
@@ -85,7 +87,7 @@ class Batch_Evaluate:
 					"--data_dir " + self._data_folder + " " + \
 					"--model_path " + model_path +  " " +\
 					"--checkpoint_path " + checkpoint_path +  " " +\
-					"--batch_size " + str(10) + " " +\
+					"--batch_size " + str(self.batch_size) + " " +\
 					"--stride_inplane " + str(stride) + " " +\
 					"--stride_layer " + str(stride)
 

@@ -31,7 +31,9 @@ def get_args():
 
 def main(args):
 	be = batch_evaluate.Batch_Evaluate()
-	be.model_folder = "../../tmp_dental/ckpt"
+	be.model_folder = "./tmp_dental/ckpt"
+	be.checkpoint_min = 5000
+	be.batch_size = 10
 	be.Execute()
 
 	return
