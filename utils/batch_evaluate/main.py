@@ -33,7 +33,13 @@ def main(args):
 	be = batch_evaluate.Batch_Evaluate()
 	be.model_folder = "./tmp_dental/ckpt"
 	be.checkpoint_min = 5000
+	be.stride_min = 40
+	be.stride_max = 64
 	be.batch_size = 10
+	be.data_folder = "./data_dental/evaluate"
+	be.ground_truth_filename = "./label_teeth.nii.gz"
+	be.evaluated_filename = "./label_vnet.nii.gz"
+	be.output_folder = "./tmp_dental"
 	be.Execute()
 
 	return
