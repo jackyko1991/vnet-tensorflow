@@ -37,7 +37,7 @@ def main(args):
 	be.stride_max = 64
 	be.batch_size = 10
 	be.data_folder = "./data_dental/evaluate"
-	be.ground_truth_filename = "./label_teeth.nii.gz"
+	be.ground_truth_filename = "./label.nii"
 	be.evaluated_filename = "./label_vnet.nii.gz"
 	be.output_folder = "./tmp_dental"
 	be.Execute()
