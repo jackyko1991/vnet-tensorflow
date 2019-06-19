@@ -31,15 +31,15 @@ def get_args():
 
 def main(args):
 	be = batch_evaluate.Batch_Evaluate()
-	be.model_folder = "./tmp_dental/ckpt"
-	be.checkpoint_min = 5000
+	be.model_folder = "./tmp/ckpt"
+	be.checkpoint_min = 20000
 	be.stride_min = 40
 	be.stride_max = 64
 	be.batch_size = 10
-	be.data_folder = "./data_dental/evaluate"
-	be.ground_truth_filename = "./label.nii"
+	be.data_folder = "./data_WML/evaluate"
+	be.ground_truth_filename = "./label.nii.gz"
 	be.evaluated_filename = "./label_vnet.nii.gz"
-	be.output_folder = "./tmp_dental"
+	be.output_folder = "./tmp"
 	be.Execute()
 
 	return

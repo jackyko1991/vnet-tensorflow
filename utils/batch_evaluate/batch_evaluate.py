@@ -193,7 +193,7 @@ class Batch_Evaluate:
 		if not os.path.exists(self._output_folder):
 			os.makedirs(self._output_folder)
 
-		print(ckpts)
+		# print(ckpts)
 
 		for ckpt in ckpts:
 			model_path = os.path.join(self._model_folder,ckpt)
@@ -206,7 +206,7 @@ class Batch_Evaluate:
 			for stride in range(self.stride_min,self.stride_max+1, self.step):
 				print("Evaluation with stride {}".format(stride))
 
-				command = "python ../../evaluate.py " + \
+				command = "python evaluate.py " + \
 					"--data_dir " + self._data_folder + " " + \
 					"--model_path " + model_path +  " " +\
 					"--checkpoint_path " + checkpoint_path +  " " +\
@@ -215,7 +215,7 @@ class Batch_Evaluate:
 					"--stride_layer " + str(stride)
 
 				print(command)
-				# os.system(command)
+				os.system(command)
 
 				# create csv file for logging
 				output_csv_path = os.path.join(self._output_folder, "result_checkpoint-" + str(checkpoint_num) + "_stride-" + str(stride)) + ".csv"
