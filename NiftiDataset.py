@@ -24,7 +24,8 @@ class NiftiDataset(object):
 		label_filename = '',
 		transforms=None,
 		train=False,
-		distmap=False):
+		distmap=False,
+		sigma=2):
 
 		# Init membership variables
 		self.data_dir = data_dir
@@ -33,6 +34,7 @@ class NiftiDataset(object):
 		self.transforms = transforms
 		self.train = train
 		self.distmap = distmap
+		self.sigma = sigma
 
 	def get_dataset(self):
 		image_paths = []
@@ -115,7 +117,7 @@ class NiftiDataset(object):
 			distMap = multiFilter.Execute(distMap,-1)
 
 			divFilter = sitk.DivideImageFilter()
-			distMap = divFilter.Execute(distMap,2) # sigma of the attention distribution
+			distMap = divFilter.Execute(distMap,self.sigma) # sigma of the attention distribution
 			powFilter = sitk.PowImageFilter()
 			distMap = powFilter.Execute(distMap,2)
 			expFilter = sitk.ExpNegativeImageFilter()
