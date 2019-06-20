@@ -45,8 +45,65 @@ def get_args():
 		type=int,
 		metavar='INT',
 		default=999999999999999999999999999999)
+	parser.add_argument(
+		'-smin','--stride_min',
+		dest='stride_min',
+		help='Minimum stride',
+		type=int,
+		metavar='INT',
+		default=32)
+	parser.add_argument(
+		'-smax','--stride_max',
+		dest='stride_max',
+		help='Maximum stride',
+		type=int,
+		metavar='INT',
+		default=64)
+	parser.add_argument(
+		'-b','--batch',
+		dest='batch',
+		help='Batch size',
+		type=int,
+		metavar='INT',
+		default=5)
+	parser.add_argument(
+		'-d','--data_dir',
+		dest='data_dir',
+		help='Data folder',
+		type=readable_dir,
+		metavar='DIR',
+		default='./data/evaluate')
+	parser.add_argument(
+		'-gt', '--ground_truth_filename',
+		dest='ground_truth_filename',
+		help='Ground truth filename',
+		type=str,
+		metavar='FILENAME',
+		default="./label.nii.gz"
+		)
+	parser.add_argument(
+		'-e', '--evaluate_filename',
+		dest='evaluate_filename',
+		help='Evaluated filename',
+		type=str,
+		metavar='FILENAME',
+		default="./label_vnet.nii.gz"
+		)
+	parser.add_argument(
+		'-o', '--output',
+		dest='output',
+		help='Output directory',
+		type=readable_dir,
+		metavar='DIR',
+		default="./tmp"
+		)
+
 
 	params = '--checkpoint_min 20000 \
+		--stride_min 40 \
+		--stride_max 64 \
+		--batch 10 \
+		--data_dir ./data_WML/evaluate \
 	'
 	args = parser.parse_args(params.split())
 	# args = parser.parse_args()
@@ -64,13 +121,13 @@ def main(args):
 	be.model_folder = args.checkpoint_dir
 	be.checkpoint_min = args.checkpoint_min
 	be.checkpoint_max = args.checkpoint_max
-	be.stride_min = 40
-	be.stride_max = 64
-	be.batch_size = 10
-	be.data_folder = "./data_WML/evaluate"
-	be.ground_truth_filename = "./label.nii.gz"
-	be.evaluated_filename = "./label_vnet.nii.gz"
-	be.output_folder = "./tmp"
+	be.stride_min = args.stride_min
+	be.stride_max = args.stride_max
+	be.batch_size = args.batch
+	be.data_folder = args.data_dir
+	be.ground_truth_filename = args.ground_truth_filename
+	be.evaluated_filename = args.evaluate_filename
+	be.output_folder = args.output
 	be.Execute()
 
 	return
