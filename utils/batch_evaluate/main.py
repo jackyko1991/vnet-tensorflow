@@ -46,16 +46,30 @@ def get_args():
 		metavar='INT',
 		default=999999999999999999999999999999)
 	parser.add_argument(
-		'-smin','--stride_min',
-		dest='stride_min',
-		help='Minimum stride',
+		'-slmin','--stride_layer_min',
+		dest='stride_layer_min',
+		help='Minimum stride across layers',
 		type=int,
 		metavar='INT',
 		default=32)
 	parser.add_argument(
-		'-smax','--stride_max',
-		dest='stride_max',
-		help='Maximum stride',
+		'-slmax','--stride_layer_max',
+		dest='stride_layer_max',
+		help='Maximum stride across layers',
+		type=int,
+		metavar='INT',
+		default=64)
+	parser.add_argument(
+		'-spmin','--stride_inplane_min',
+		dest='stride_inplane_min',
+		help='Minimum stride across the plane',
+		type=int,
+		metavar='INT',
+		default=32)
+	parser.add_argument(
+		'-spmax','--stride_inplane_max',
+		dest='stride_inplane_max',
+		help='Maximum stride across the plane',
 		type=int,
 		metavar='INT',
 		default=64)
@@ -121,8 +135,10 @@ def main(args):
 	be.model_folder = args.checkpoint_dir
 	be.checkpoint_min = args.checkpoint_min
 	be.checkpoint_max = args.checkpoint_max
-	be.stride_min = args.stride_min
-	be.stride_max = args.stride_max
+	be.stride_layer_min = args.stride_layer_min
+	be.stride_layer_max = args.stride_layer_max
+	be.stride_inplane_min = args.stride_layer_min
+	be.stride_inplane_max = args.stride_layer_max
 	be.batch_size = args.batch
 	be.data_folder = args.data_dir
 	be.ground_truth_filename = args.ground_truth_filename

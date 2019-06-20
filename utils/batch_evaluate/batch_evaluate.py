@@ -123,8 +123,10 @@ class Batch_Evaluate:
 		data_folder = "./data",
 		ground_truth_filename = "label.nii.gz",
 		evaluated_filename = "label_vnet.nii.gz",
-		stride_min=30,
-		stride_max=64,
+		stride_layer_min=32,
+		stride_layer_max=64,
+		stride_inplane_min=32,
+		stride_inplane_max=64,
 		step=2,
 		checkpoint_min=1,
 		checkpoint_max=9999999999999999999999999,
@@ -139,10 +141,19 @@ class Batch_Evaluate:
 		assert isinstance(evaluated_filename, str)
 		self.evaluated_filename = evaluated_filename
 
-		assert isinstance(step, int)
-		assert step > 0
-		self.stride_min = stride_min
-		self.stride_max = stride_max
+		assert isinstance(stride_layer_min, int)
+		assert isinstance(stride_layer_max, int)
+		assert stride_layer_min > 0
+		assert stride_layer_max > 0
+		self.stride_layer_min = stride_layer_min
+		self.stride_layer_max = stride_layer_max
+
+		assert isinstance(stride_inplane_min, int)
+		assert isinstance(stride_inplane_max, int)
+		assert stride_inplane_min > 0
+		assert stride_inplane_max > 0
+		self.stride_inplane_min = stride_inplane_min
+		self.stride_inplane_max = stride_inplane_max
 
 		assert isinstance(step, int)
 		assert step > 0
@@ -203,73 +214,73 @@ class Batch_Evaluate:
 			if checkpoint_num < self.checkpoint_min or checkpoint_num > self.checkpoint_max:
 				continue
 
-			for stride in range(self.stride_min,self.stride_max+1, self.step):
-				print("Evaluation with stride {}".format(stride))
+			for stride_inplane in range(self.stride_inplane_min,self.stride_inplane_max+1, self.step):
+				for stride_layer  in range(self.stride_layer_min,self.stride_layer_max+1, self.step):
 
 				command = "python evaluate.py " + \
 					"--data_dir " + self._data_folder + " " + \
 					"--model_path " + model_path +  " " +\
 					"--checkpoint_path " + checkpoint_path +  " " +\
 					"--batch_size " + str(self.batch_size) + " " +\
-					"--stride_inplane " + str(stride) + " " +\
-					"--stride_layer " + str(stride)
+					"--stride_inplane " + str(stride_inplane) + " " +\
+					"--stride_layer " + str(stride_layer)
 
-				print(command)
-				os.system(command)
+					# print(command)
+					os.system(command)
 
-				# create csv file for logging
-				output_csv_path = os.path.join(self._output_folder, "result_checkpoint-" + str(checkpoint_num) + "_stride-" + str(stride)) + ".csv"
+					# create csv file for logging
+					output_csv_path = os.path.join(self._output_folder, "result_checkpoint-" + str(checkpoint_num) + "_stride_inplane-" + str(stride_inplane) + "_stride_layer-" + str(stride_layer) + ".csv"
 
-				if os.path.exists(output_csv_path):
-					os.remove(output_csv_path)
-				csvfile = open(output_csv_path,'w')
-				filenames = ['Case']
-				if 'DICE' in self.mode:
-					filenames.append('DICE')
-					filenames.append('Jaccard')
-				if 'ITEM' in self.mode:
-					filenames.append('TP')
-					filenames.append('FP')
-					filenames.append('FN')
-					filenames.append('Item Sensitivity')
-					filenames.append('Item IoU')
-				filewriter = csv.DictWriter(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL, fieldnames=filenames)
-				filewriter.writeheader()
+					if os.path.exists(output_csv_path):
+						os.remove(output_csv_path)
+					csvfile = open(output_csv_path,'w')
+					filenames = ['Case']
+					if 'DICE' in self.mode:
+						filenames.append('DICE')
+						filenames.append('Jaccard')
+					if 'ITEM' in self.mode:
+						filenames.append('TP')
+						filenames.append('FP')
+						filenames.append('FN')
+						filenames.append('Item Sensitivity')
+						filenames.append('Item IoU')
+					filewriter = csv.DictWriter(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL, fieldnames=filenames)
+					filewriter.writeheader()
 
-				# accuracy checking for evaluated models
-				TP = []
-				FP = []
-				FN = []
-				DICE = []
-				Jaccard = []
+					# accuracy checking for evaluated models
+					TP = []
+					FP = []
+					FN = []
+					DICE = []
+					Jaccard = []
 
-				for case in os.listdir(self._data_folder):
-					print(case)
-					if not os.path.exists(os.path.join(self._data_folder, case, self.ground_truth_filename)):
-						continue
-					if not os.path.exists(os.path.join(self._data_folder, case, self.evaluated_filename)):
-						continue
+					for case in os.listdir(self._data_folder):
+						print(case)
+						if not os.path.exists(os.path.join(self._data_folder, case, self.ground_truth_filename)):
+							continue
+						if not os.path.exists(os.path.join(self._data_folder, case, self.evaluated_filename)):
+							continue
 
-					# read image first
-					if 'DICE' in self.mode or "DICE" in self.mode or \
-						'ITEM' in self.mode or "ITEM" in self.mode:
-						reader = sitk.ImageFileReader()
-						reader.SetFileName(os.path.join(self._data_folder, case, self.ground_truth_filename))
-						groundTruth = reader.Execute()
-						reader.SetFileName(os.path.join(self._data_folder, case, self.evaluated_filename))
-						evaluated = reader.Execute()
+						# read image first
+						if 'DICE' in self.mode or "DICE" in self.mode or \
+							'ITEM' in self.mode or "ITEM" in self.mode:
+							reader = sitk.ImageFileReader()
+							reader.SetFileName(os.path.join(self._data_folder, case, self.ground_truth_filename))
+							groundTruth = reader.Execute()
+							reader.SetFileName(os.path.join(self._data_folder, case, self.evaluated_filename))
+							evaluated = reader.Execute()
 
-					result = Accuracy(groundTruth, evaluated, mode=self.mode)
-					result['Case'] = case
-					print(result)
-					filewriter.writerow(result)
+						result = Accuracy(groundTruth, evaluated, mode=self.mode)
+						result['Case'] = case
+						print(result)
+						filewriter.writerow(result)
 
-					if 'DICE' in self.mode or "DICE" in self.mode:
-						DICE.append(result['DICE'])
-						Jaccard.append(result['Jaccard'])
-				avg_result = {'Case': "average", 
-					'DICE': np.sum(DICE)/len(DICE), 
-					'Jaccard': np.sum(Jaccard)/len(Jaccard)}
-				filewriter.writerow(avg_result)
+						if 'DICE' in self.mode or "DICE" in self.mode:
+							DICE.append(result['DICE'])
+							Jaccard.append(result['Jaccard'])
+					avg_result = {'Case': "average", 
+						'DICE': np.sum(DICE)/len(DICE), 
+						'Jaccard': np.sum(Jaccard)/len(Jaccard)}
+					filewriter.writerow(avg_result)
 
-				exit()				
+					exit()				
