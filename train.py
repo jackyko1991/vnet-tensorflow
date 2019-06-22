@@ -25,15 +25,15 @@ tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',64,
+tf.app.flags.DEFINE_integer('patch_size',192,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',64,
+tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',1e-1,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
 tf.app.flags.DEFINE_float('decay_factor',1.0,
 	"""Exponential decay learning rate factor""")
@@ -63,9 +63,9 @@ tf.app.flags.DEFINE_string('optimizer','sgd',
 	"""Optimization method (sgd, adam, momentum, nesterov_momentum)""")
 tf.app.flags.DEFINE_float('momentum',0.5,
 	"""Momentum used in optimization""")
-tf.app.flags.DEFINE_bool('testing',False,
+tf.app.flags.DEFINE_bool('testing',True,
 	"""Perform testing after each epoch""")
-tf.app.flags.DEFINE_bool('attention',True,
+tf.app.flags.DEFINE_bool('attention',False,
 	"""Perform testing after each epoch""")
 tf.app.flags.DEFINE_bool('image_log',False,
 	"""Perform testing after each epoch""")
@@ -205,15 +205,16 @@ def train():
 		with tf.device('/cpu:0'):
 			# create transformations to image and labels
 			trainTransforms = [
-				NiftiDataset.StatisticalNormalization(2.5),
+				NiftiDataset.StatisticalNormalization(2.8),
 				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((1,1,1)),
+				NiftiDataset.Resample((0.75,0.75,0.75)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
 				# NiftiDataset.BSplineDeformation(randomness=2),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.5)),
-				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.5),
+				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
+				NiftiDataset.RandomFlip([False, False, True]),
 				NiftiDataset.RandomNoise()
 				]
 
@@ -233,15 +234,16 @@ def train():
 			if FLAGS.testing:
 				# use random crop for testing
 				testTransforms = [
-					NiftiDataset.StatisticalNormalization(2.5),
+					NiftiDataset.StatisticalNormalization(2.8),
 					# NiftiDataset.Normalization(),
-					NiftiDataset.Resample((1,1,1)),
+					NiftiDataset.Resample((0.75,0.75,0.75)),
 					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 					# NiftiDataset.BSplineDeformation(),
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.75,0.75,0.75)),
-					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.5),
+					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
+					NiftiDataset.RandomFlip([False, False, True]),
 					]
 
 				TestDataset = NiftiDataset.NiftiDataset(

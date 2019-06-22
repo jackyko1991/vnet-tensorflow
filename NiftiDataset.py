@@ -172,6 +172,29 @@ class Normalization(object):
 
 		return {'image': image, 'label': label}
 
+class RandomFlip(object):
+	"""
+	Randomly Flip image by user specified axes
+	"""
+
+	def __init__(self, axes):
+		self.name = 'Flip'
+		assert len(axes)>0 and len(axes)<=3
+		self.axes = axes
+
+	def __call__(self, sample):
+		image, label = sample['image'], sample['label']
+
+		flip = np.random.randint(2, size=1)[0]
+		if flip:
+			flipFilter = sitk.FlipImageFilter()
+			for image_channel in range(len(image)):
+				flipFilter.SetFlipAxes(self.axes)
+				image[image_channel] = flipFilter.Execute(image[image_channel])
+			label = flipFilter.Execute(label)
+
+		return {'image': image, 'label': label}
+
 class StatisticalNormalization(object):
 	"""
 	Normalize an image by mapping intensity with intensity distribution
