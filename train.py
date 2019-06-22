@@ -586,7 +586,7 @@ def train():
 										attentionModule.train_phase: False, 
 										outputModule.train_phase: False})
 							else:
-								loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label})
+								loss, summary = sess.run([loss_op, summary_op], feed_dict={images_placeholder: image, labels_placeholder: label, model.train_phase: False})
 
 							test_summary_writer.add_summary(summary, global_step=tf.train.global_step(sess, global_step))
 							train_summary_writer.flush()
