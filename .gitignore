@@ -5,3 +5,4 @@ tmp*
 cxx/build
 sftp-config.json
 =======
+.vscode
