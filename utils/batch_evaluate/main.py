@@ -75,6 +75,20 @@ def get_args():
 		metavar='INT',
 		default=64)
 	parser.add_argument(
+		'-ps','--patch_size',
+		dest='patch_size',
+		help='Patch size',
+		type=int,
+		metavar='INT',
+		default=64)
+	parser.add_argument(
+		'-pl','--patch_layer',
+		dest='patch_layer',
+		help='Patch layer',
+		type=int,
+		metavar='INT',
+		default=64)
+	parser.add_argument(
 		'-b','--batch',
 		dest='batch',
 		help='Batch size',
@@ -113,17 +127,19 @@ def get_args():
 		default="./tmp"
 		)
 
-	params = '--checkpoint_min 100000 \
-		--stride_inplane_min 144 \
-		--stride_inplane_max 144 \
-		--stride_layer_min 12 \
-		--stride_layer_max 12 \
-		--batch 5 \
-		--data_dir ./data_WML/evaluate \
-		--checkpoint_dir ./tmp/ckpt \
-	'
-	args = parser.parse_args(params.split())
-	# args = parser.parse_args()
+	# params = '--checkpoint_min 100000 \
+	# 	--stride_inplane_min 144 \
+	# 	--stride_inplane_max 144 \
+	# 	--stride_layer_min 12 \
+	# 	--stride_layer_max 12 \
+	# 	--patch_size 192 \
+	# 	--patch_layer 16 \
+	# 	--batch 5 \
+	# 	--data_dir ./data_WML/evaluate \
+	# 	--checkpoint_dir ./tmp/ckpt \
+	# '
+	# args = parser.parse_args(params.split())
+	args = parser.parse_args()
 
 	# print arguments if verbose
 	if args.verbose:
@@ -142,8 +158,8 @@ def main(args):
 	be.stride_layer_max = args.stride_layer_max
 	be.stride_inplane_min = args.stride_inplane_min
 	be.stride_inplane_max = args.stride_inplane_max
-	be.patch_size = 192
-	be.patch_layer = 16
+	be.patch_size = args.patch_size
+	be.patch_layer = args.patch_layer
 	be.batch_size = args.batch
 	be.data_folder = args.data_dir
 	be.ground_truth_filename = args.ground_truth_filename
