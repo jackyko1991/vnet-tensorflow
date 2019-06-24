@@ -19,24 +19,26 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir','./data_SWAN/evaluate',
+tf.app.flags.DEFINE_string('data_dir','./data_WML/evaluate',
 	"""Directory of evaluation data""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
-tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-25185.meta',
+tf.app.flags.DEFINE_string('model_path','./tmp/ckpt/checkpoint-103233.meta',
 	"""Path to saved models""")
-tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-25185',
+tf.app.flags.DEFINE_string('checkpoint_path','./tmp/ckpt/checkpoint-103233',
 	"""Directory of saved checkpoints""")
-tf.app.flags.DEFINE_integer('patch_size',64,
+tf.app.flags.DEFINE_integer('patch_size',192,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',64,
+tf.app.flags.DEFINE_integer('patch_layer',16,
 	"""Number of layers in data patch""")
-tf.app.flags.DEFINE_integer('stride_inplane', 48,
+tf.app.flags.DEFINE_integer('stride_inplane', 144,
 	"""Stride size in 2D plane""")
-tf.app.flags.DEFINE_integer('stride_layer',48,
+tf.app.flags.DEFINE_integer('stride_layer',12,
 	"""Stride size in layer direction""")
 tf.app.flags.DEFINE_integer('batch_size',5,
 	"""Setting batch size (currently only accept 1)""")
+tf.app.flags.DEFINE_boolean('attention',False,
+	"""Set if the training model applies attention module""")
 
 def prepare_batch(image_ijk_patch_indices_dict):
 	# image_batches = []
@@ -75,9 +77,9 @@ def evaluate():
 
 	# create transformations to image and labels
 	transforms = [  
-		NiftiDataset.StatisticalNormalization(2.5),
+		NiftiDataset.StatisticalNormalization(2.8),
 		# NiftiDataset.Normalization(),
-		NiftiDataset.Resample((0.4,0.4,0.4)),
+		NiftiDataset.Resample((0.75,0.75,0.75)),
 		NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 		]
 
@@ -215,7 +217,16 @@ def evaluate():
 			# acutal segmentation
 			for i in tqdm(range(len(batches))):
 				batch = batches[i]
-				[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={'images_placeholder:0': batch, 'vnet/train_phase_placeholder:0': False})
+				if FLAGS.attention:
+					[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={
+						'images_placeholder:0': batch, 
+						'vnet/train_phase_placeholder:0': False,
+						'attention/train_phase_placeholder:0': False,
+						'output/train_phase_placeholder:0': False})
+				else:
+					[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={
+						'images_placeholder:0': batch, 
+						'vnet/train_phase_placeholder:0': False})
 				for j in range(pred.shape[0]):
 					istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
 					iend = image_ijk_patch_indices_dicts[i]['indexes'][j][1]
