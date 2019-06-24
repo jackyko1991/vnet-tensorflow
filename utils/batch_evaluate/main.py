@@ -116,9 +116,9 @@ def get_args():
 	params = '--checkpoint_min 100000 \
 		--stride_inplane_min 144 \
 		--stride_inplane_max 144 \
-		--stride_layer_min 12\
-		--stride_layer_max 12\
-		--batch 10 \
+		--stride_layer_min 12 \
+		--stride_layer_max 12 \
+		--batch 5 \
 		--data_dir ./data_WML/evaluate \
 		--checkpoint_dir ./tmp/ckpt \
 	'
@@ -140,8 +140,10 @@ def main(args):
 	be.checkpoint_max = args.checkpoint_max
 	be.stride_layer_min = args.stride_layer_min
 	be.stride_layer_max = args.stride_layer_max
-	be.stride_inplane_min = args.stride_layer_min
-	be.stride_inplane_max = args.stride_layer_max
+	be.stride_inplane_min = args.stride_inplane_min
+	be.stride_inplane_max = args.stride_inplane_max
+	be.patch_size = 192
+	be.patch_layer = 16
 	be.batch_size = args.batch
 	be.data_folder = args.data_dir
 	be.ground_truth_filename = args.ground_truth_filename

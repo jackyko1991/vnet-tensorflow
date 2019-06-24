@@ -3,6 +3,7 @@ import SimpleITK as sitk
 import tensorflow as tf
 import csv
 import numpy as np
+import subprocess
 
 def dist(a,b):
 	x = 0
@@ -127,6 +128,8 @@ class Batch_Evaluate:
 		stride_layer_max=64,
 		stride_inplane_min=32,
 		stride_inplane_max=64,
+		patch_size=64,
+		patch_layer=64,
 		step=2,
 		checkpoint_min=1,
 		checkpoint_max=9999999999999999999999999,
@@ -215,17 +218,19 @@ class Batch_Evaluate:
 				continue
 
 			for stride_inplane in range(self.stride_inplane_min,self.stride_inplane_max+1, self.step):
-				for stride_layer  in range(self.stride_layer_min,self.stride_layer_max+1, self.step):
+				for stride_layer in range(self.stride_layer_min,self.stride_layer_max+1, self.step):
 					command = "python evaluate.py " + \
 						"--data_dir " + self._data_folder + " " + \
 						"--model_path " + model_path +  " " +\
 						"--checkpoint_path " + checkpoint_path +  " " +\
 						"--batch_size " + str(self.batch_size) + " " +\
 						"--stride_inplane " + str(stride_inplane) + " " +\
-						"--stride_layer " + str(stride_layer)
+						"--stride_layer " + str(stride_layer) + " " + \
+						"--patch_size " + str(self.patch_size) + " " + \
+						"--patch_layer " + str(self.patch_layer)
 
-					# print(command)
 					os.system(command)
+					# subprocess.call(command, shell=True)
 
 					# create csv file for logging
 					output_csv_path = os.path.join(self._output_folder, "result_checkpoint-" + str(checkpoint_num) + "_stride_inplane-" + str(stride_inplane) + "_stride_layer-" + str(stride_layer) + ".csv")
@@ -281,3 +286,4 @@ class Batch_Evaluate:
 						'DICE': np.sum(DICE)/len(DICE), 
 						'Jaccard': np.sum(Jaccard)/len(Jaccard)}
 					filewriter.writerow(avg_result)	
+					filewriter.close()
