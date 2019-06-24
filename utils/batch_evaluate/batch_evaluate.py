@@ -216,20 +216,19 @@ class Batch_Evaluate:
 
 			for stride_inplane in range(self.stride_inplane_min,self.stride_inplane_max+1, self.step):
 				for stride_layer  in range(self.stride_layer_min,self.stride_layer_max+1, self.step):
-
-				command = "python evaluate.py " + \
-					"--data_dir " + self._data_folder + " " + \
-					"--model_path " + model_path +  " " +\
-					"--checkpoint_path " + checkpoint_path +  " " +\
-					"--batch_size " + str(self.batch_size) + " " +\
-					"--stride_inplane " + str(stride_inplane) + " " +\
-					"--stride_layer " + str(stride_layer)
+					command = "python evaluate.py " + \
+						"--data_dir " + self._data_folder + " " + \
+						"--model_path " + model_path +  " " +\
+						"--checkpoint_path " + checkpoint_path +  " " +\
+						"--batch_size " + str(self.batch_size) + " " +\
+						"--stride_inplane " + str(stride_inplane) + " " +\
+						"--stride_layer " + str(stride_layer)
 
 					# print(command)
 					os.system(command)
 
 					# create csv file for logging
-					output_csv_path = os.path.join(self._output_folder, "result_checkpoint-" + str(checkpoint_num) + "_stride_inplane-" + str(stride_inplane) + "_stride_layer-" + str(stride_layer) + ".csv"
+					output_csv_path = os.path.join(self._output_folder, "result_checkpoint-" + str(checkpoint_num) + "_stride_inplane-" + str(stride_inplane) + "_stride_layer-" + str(stride_layer) + ".csv")
 
 					if os.path.exists(output_csv_path):
 						os.remove(output_csv_path)
@@ -281,6 +280,4 @@ class Batch_Evaluate:
 					avg_result = {'Case': "average", 
 						'DICE': np.sum(DICE)/len(DICE), 
 						'Jaccard': np.sum(Jaccard)/len(Jaccard)}
-					filewriter.writerow(avg_result)
-
-					exit()				
+					filewriter.writerow(avg_result)	

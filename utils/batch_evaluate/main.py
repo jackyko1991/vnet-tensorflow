@@ -1,5 +1,6 @@
 import batch_evaluate
 import argparse
+import os
 
 def readable_dir(directory):
 	"""
@@ -112,12 +113,14 @@ def get_args():
 		default="./tmp"
 		)
 
-
-	params = '--checkpoint_min 20000 \
-		--stride_min 40 \
-		--stride_max 64 \
+	params = '--checkpoint_min 100000 \
+		--stride_inplane_min 144 \
+		--stride_inplane_max 144 \
+		--stride_layer_min 12\
+		--stride_layer_max 12\
 		--batch 10 \
 		--data_dir ./data_WML/evaluate \
+		--checkpoint_dir ./tmp/ckpt \
 	'
 	args = parser.parse_args(params.split())
 	# args = parser.parse_args()
