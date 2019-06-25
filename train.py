@@ -67,7 +67,7 @@ tf.app.flags.DEFINE_bool('testing',False,
 	"""Perform testing after each epoch""")
 tf.app.flags.DEFINE_bool('attention',False,
 	"""Perform testing after each epoch""")
-tf.app.flags.DEFINE_bool('image_log',False,
+tf.app.flags.DEFINE_bool('image_log',True,
 	"""Perform testing after each epoch""")
 
 # tf.app.flags.DEFINE_float('class_weight',0.15,
@@ -205,7 +205,7 @@ def train():
 		with tf.device('/cpu:0'):
 			# create transformations to image and labels
 			trainTransforms = [
-				NiftiDataset.StatisticalNormalization(2.8, pre_norm=True),
+				NiftiDataset.ExtremumNormalization(0.1),
 				# NiftiDataset.Normalization(),
 				NiftiDataset.Resample((0.75,0.75,0.75)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
@@ -234,7 +234,7 @@ def train():
 			if FLAGS.testing:
 				# use random crop for testing
 				testTransforms = [
-					NiftiDataset.StatisticalNormalization(2.8, pre_norm=True),
+					NiftiDataset.ExtremumNormalization(0.1),
 					# NiftiDataset.Normalization(),
 					NiftiDataset.Resample((0.75,0.75,0.75)),
 					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),

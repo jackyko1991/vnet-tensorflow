@@ -227,6 +227,35 @@ class StatisticalNormalization(object):
 
 		return {'image': image, 'label': label}
 
+class ExtremumNormalization(object):
+	"""
+	Normalize an image by mapping intensity with intensity maximum and minimum
+	"""
+
+	def __init__(self, percent=0.05):
+		self.name = 'ExtremumNormalization'
+		assert isinstance(percent, float)
+		self.percent = percent
+
+	def __call__(self, sample):
+		image, label = sample['image'], sample['label']
+
+		for image_channel in range(len(image)):
+			statisticsFilter = sitk.StatisticsImageFilter()
+			statisticsFilter.Execute(image[image_channel])
+
+			intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
+			intensityWindowingFilter.SetOutputMaximum(255)
+			intensityWindowingFilter.SetOutputMinimum(0)
+			windowMax = (statisticsFilter.GetMaximum() - statisticsFilter.GetMinimum())*(1-self.percent) + statisticsFilter.GetMinimum()
+			windowMin = (statisticsFilter.GetMaximum() - statisticsFilter.GetMinimum())*self.percent + statisticsFilter.GetMinimum()
+			intensityWindowingFilter.SetWindowMaximum(windowMax);
+			intensityWindowingFilter.SetWindowMinimum(windowMin);
+
+			image[image_channel] = intensityWindowingFilter.Execute(image[image_channel])
+
+		return {'image': image, 'label': label}
+
 class ManualNormalization(object):
 	"""
 	Normalize an image by mapping intensity with given max and min window level
