@@ -200,15 +200,20 @@ class StatisticalNormalization(object):
 	Normalize an image by mapping intensity with intensity distribution
 	"""
 
-	def __init__(self, sigma):
+	def __init__(self, sigma, pre_norm=False):
 		self.name = 'StatisticalNormalization'
 		assert isinstance(sigma, float)
 		self.sigma = sigma
+		self.pre_norm=pre_norm
 
 	def __call__(self, sample):
 		image, label = sample['image'], sample['label']
 
 		for image_channel in range(len(image)):
+			if self.pre_norm:
+				normalFilter= sitk.NormalizeImageFilter()
+				image[image_channel] = normalFilter.Execute(image[image_channel])
+
 			statisticsFilter = sitk.StatisticsImageFilter()
 			statisticsFilter.Execute(image[image_channel])
 
