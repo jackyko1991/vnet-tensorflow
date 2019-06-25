@@ -67,7 +67,7 @@ tf.app.flags.DEFINE_bool('testing',False,
 	"""Perform testing after each epoch""")
 tf.app.flags.DEFINE_bool('attention',False,
 	"""Perform testing after each epoch""")
-tf.app.flags.DEFINE_bool('image_log',True,
+tf.app.flags.DEFINE_bool('image_log',False,
 	"""Perform testing after each epoch""")
 
 # tf.app.flags.DEFINE_float('class_weight',0.15,
