@@ -12,6 +12,7 @@ class NiftiDataset(object):
 	Currently only support linear interpolation method
 	Args:
 		data_dir (string): Path to data directory.
+
 	image_filename (string): Filename of image data.
 	label_filename (string): Filename of label data.
 	transforms (list): List of SimpleITK image transformations.
