@@ -50,7 +50,7 @@ All training, testing and evaluation data should put in `./data`
     |   |   ├──...
     │   ├── training              # Put all training data here
     |   |   ├── case1             # foldername for the cases is arbitary
-    |   |   |   ├── img.nii.gz    # Image for testing
+    |   |   |   ├── img.nii.gz    # Image for training
     |   |   |   └── label.nii.gz  # Corresponding label for training
     |   |   ├── case2
     |   |   ├──...
@@ -134,7 +134,7 @@ Here we introduce serveral data augmentation skills that allow users to normaliz
 
 1. Image Normalization (fit to 0-255)
 2. Isotropic Resampling (adjustable size, in mm)
-3. Gadding (allow input image batch smaller than network input size to be trained)
+3. Padding (allow input image batch smaller than network input size to be trained)
 4. Random Crop (randomly select a zone in the 3D medical image in exact size as network input)
 5. Gaussian Noise
 
