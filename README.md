@@ -64,11 +64,11 @@ All training, testing and evaluation data should put in `./data`
     |   └── log                   # Tensorboard logging folder
     ├── ...
     
-If you wish to use image and label with filename other than `img.nii.gz` and `label.nii.gz`, please change the following values in `train.py`
+If you wish to use image and label with filename other than `img.nii.gz` and `label.nii.gz`, please change the following values in `config.json`
 
-```python
-image_filename = 'img.nii.gz'
-label_filename = 'label.nii.gz'
+```json
+"ImageFilenames": ["img.nii.gz"],
+"LabelFilename": "label.nii.gz"
 ```
 
 In segmentation tasks, image and label are always in pair, missing either one would terminate the training process.
@@ -79,52 +79,46 @@ You may run train.py with commandline arguments. To check usage, type ```python 
 
 Available training parameters
 ```console
-  --batch_size: Size of batch
-    (default: '1')
-    (an integer)
-  --checkpoint_dir: Directory where to write checkpoint
-    (default: './tmp/ckpt')
   --data_dir: Directory of stored data.
-    (default: './data')
+    (default: './data_3DRA')
   --decay_factor: Exponential decay learning rate factor
-    (default: '0.01')
-    (a number) (not implemented)
+    (default: '0.99')
   --decay_steps: Number of epoch before applying one learning rate decay
     (default: '100')
-    (an integer) (not implemented)
   --display_step: Display and logging interval (train steps)
     (default: '10')
-    (an integer)
-  --drop_ratio: Probability to drop a cropped area if the label is empty. All
-    empty patches will be droped for 0 and accept all cropped patches if set to
-    1
-    (default: '0.5')
-    (a number)
+  --drop_ratio: Probability to drop a cropped area if the label is empty. All empty patches will be dropped for 0 and accept all cropped patches if set to 1
+    (default: '0.01')
   --epochs: Number of epochs for training
-    (default: '2000')
-    (an integer)
+    (default: '999999999')
+  --[no]image_log: Perform testing after each epoch
+    (default: 'true')
   --init_learning_rate: Initial learning rate
-    (default: '0.1')
-    (a number)
+    (default: '0.01')
+  --log_dir: Directory where to write training and testing event logs
+    (default: './tmp/log')
+  --loss_function: Loss function used in optimization (xent, weight_xent, sorensen, jaccard)
+    (default: 'sorensen')
   --min_pixel: Minimum non-zero pixels in the cropped label
-    (default: '10')
-    (an integer)
+    (default: '30')
+  --model_dir: Directory to save model
+    (default: './tmp/model')
+  --momentum: Momentum used in optimization
+    (default: '0.5')
+  --optimizer: Optimization method (sgd, adam, momentum, nesterov_momentum)
+    (default: 'sgd')
   --patch_layer: Number of layers in data patch
-    (default: '128')
-    (an integer)
+    (default: '16')
   --patch_size: Size of a data patch
-    (default: '128')
-    (an integer)
+    (default: '192')
+  --restore_training: Restore training from last checkpoint
+    (default: 'true')
   --save_interval: Checkpoint save interval (epochs)
     (default: '1')
-    (an integer)
   --shuffle_buffer_size: Number of elements used in shuffle buffer
     (default: '5')
-    (an integer)
-  --tensorboard_dir: Directory where to write tensorboard summary
-    (default: './tmp/tensorboard') (deprecated)
-  --train_dir: Directory where to write training event logs
-    (default: './tmp/train_log') (deprecated)
+  --[no]testing: Perform testing after each epoch
+    (default: 'false')
  ```
 
 #### Image batch preparation
