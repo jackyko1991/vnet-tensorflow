@@ -6,8 +6,36 @@
     },    
     "TrainingSetting": {
         "Data": {
+            "TrainingDataDirectory":"./data_3DRA/training",
+            "TestingDataDirectory": "./data_3DRA/testing",
             "ImageFilenames": ["CBCT_reg.nii"],
             "LabelFilename": "3DRA_seg.nii.gz"
-        }
+        },
+        "Restore": true,
+        "SegmentationClasses": [0,1],
+        "LogDir": "./tmp2/log",
+        "CheckpointDir": "./tmp2/ckpt",
+        "BatchSize": 1,
+        "PatchShape": [256,256,32],
+        "ImageLog": true,
+        "Testing": false,
+        "Epoches": 99999,
+        "Networks": {
+            "Name":"VNet",
+            "Dropout": 0.00,
+            "Attention": false
+        },
+        "Optimizer":{
+            "Name": "Adam",
+            "InitialLearningRate": 1e-5,
+            "Momentum":0.9,
+            "Decay":{
+                "Factor": 0.99,
+                "Step": 100
+            }
+        },
+        "Spacing": [0.25,0.25,0.25],
+        "DropRatio": 0.01,
+        "MinPixel":30
     }
 }

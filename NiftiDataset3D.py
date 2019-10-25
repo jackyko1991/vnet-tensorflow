@@ -1,6 +1,7 @@
-import SimpleITK as sitk
-import tensorflow as tf
 import os
+import SimpleITK as sitk
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
+import tensorflow as tf
 import numpy as np
 import math
 import random
@@ -463,7 +464,7 @@ class RandomCrop(object):
 
 	def __call__(self,sample):
 		image, label = sample['image'], sample['label']
-		size_old = image.GetSize()
+		size_old = image[0].GetSize()
 		size_new = self.output_size
 
 		contain_label = False
@@ -506,9 +507,12 @@ class RandomCrop(object):
 			else:
 				contain_label = True
 
-		image_crop = roiFilter.Execute(image)
+		label = label_crop
 
-		return {'image': image_crop, 'label': label_crop}
+		for image_channel in range(len(image)):
+			image[image_channel] = roiFilter.Execute(image[image_channel])
+
+		return {'image': image, 'label': label}
 
 	def drop(self,probability):
 		return random.random() <= probability
