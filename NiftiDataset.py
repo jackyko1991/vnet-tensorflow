@@ -12,6 +12,7 @@ class NiftiDataset(object):
 	Currently only support linear interpolation method
 	Args:
 		data_dir (string): Path to data directory.
+
 	image_filename (string): Filename of image data.
 	label_filename (string): Filename of label data.
 	transforms (list): List of SimpleITK image transformations.
@@ -163,7 +164,7 @@ class ManualNormalization(object):
 	"""
 	Normalize an image by mapping intensity with given max and min window level
 	"""
-
+  
 	def _init_(self,windowMin, windowMax):
 		self.name = 'ManualNormalization'
 		assert isinstance(windowMax, (int,float))

@@ -18,17 +18,17 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data_lacunar',
+tf.app.flags.DEFINE_string('data_dir', './data',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('image_filename','img_crop.nii.gz',
 	"""Image filename""")
 tf.app.flags.DEFINE_string('label_filename','label_crop.nii.gz',
 	"""Image filename""")
-tf.app.flags.DEFINE_integer('batch_size',30,
+tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',32,
+tf.app.flags.DEFINE_integer('patch_size',128,
 	"""Size of a data patch""")
-tf.app.flags.DEFINE_integer('patch_layer',16,
+tf.app.flags.DEFINE_integer('patch_layer',32,
 	"""Number of layers in data patch""")
 tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
