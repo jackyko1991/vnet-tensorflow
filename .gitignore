@@ -1,5 +1,5 @@
 data
-data_brain
+data_*
 __pycache__
 tmp*
 cxx/build
