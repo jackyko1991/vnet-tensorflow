@@ -1,0 +1,13 @@
+{
+    "ProjectName": "VNet Tensorflow",
+    "ProjectDetail": {
+        "BodyPart": "Brain",
+        "Diseases": "Lacunar"
+    },    
+    "TrainingSetting": {
+        "Data": {
+            "ImageFilenames": ["t1_crop.nii.gz","flair_crop.nii.gz"],
+            "LabelFilename": "label_crop.nii.gz"
+        }
+    }
+}
