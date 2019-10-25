@@ -14,7 +14,7 @@ import OutputModule
 import json
 
 # select gpu devices
-os.environ["CUDA_VISIBLE_DEVICES"] = "0" # e.g. "0,1,2", "0,2" 
+os.environ["CUDA_VISIBLE_DEVICES"] = "1" # e.g. "0,1,2", "0,2" 
 
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
@@ -33,9 +33,9 @@ tf.app.flags.DEFINE_integer('epochs',999999999,
 	"""Number of epochs for training""")
 tf.app.flags.DEFINE_string('log_dir', './tmp/log',
 	"""Directory where to write training and testing event logs """)
-tf.app.flags.DEFINE_float('init_learning_rate',0.5e-2,
+tf.app.flags.DEFINE_float('init_learning_rate',1e-2,
 	"""Initial learning rate""")
-tf.app.flags.DEFINE_float('decay_factor',1.0,
+tf.app.flags.DEFINE_float('decay_factor',0.99,
 	"""Exponential decay learning rate factor""")
 tf.app.flags.DEFINE_integer('decay_steps',100,
 	"""Number of epoch before applying one learning rate decay""")
@@ -49,7 +49,7 @@ tf.app.flags.DEFINE_string('model_dir','./tmp/model',
 	"""Directory to save model""")
 tf.app.flags.DEFINE_bool('restore_training',True,
 	"""Restore training from last checkpoint""")
-tf.app.flags.DEFINE_float('drop_ratio',0.001,
+tf.app.flags.DEFINE_float('drop_ratio',0.01,
 	"""Probability to drop a cropped area if the label is empty. All empty patches will be dropped for 0 and accept all cropped patches if set to 1""")
 tf.app.flags.DEFINE_integer('min_pixel',30,
 	"""Minimum non-zero pixels in the cropped label""")
@@ -67,7 +67,7 @@ tf.app.flags.DEFINE_bool('testing',False,
 	"""Perform testing after each epoch""")
 tf.app.flags.DEFINE_bool('attention',False,
 	"""Perform testing after each epoch""")
-tf.app.flags.DEFINE_bool('image_log',False,
+tf.app.flags.DEFINE_bool('image_log',True,
 	"""Perform testing after each epoch""")
 
 # tf.app.flags.DEFINE_float('class_weight',0.15,
@@ -207,7 +207,7 @@ def train():
 			trainTransforms = [
 				NiftiDataset.ExtremumNormalization(0.1),
 				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((0.75,0.75,0.75)),
+				NiftiDataset.Resample((0.25,0.25,0.25)),
 				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
@@ -236,7 +236,7 @@ def train():
 				testTransforms = [
 					NiftiDataset.ExtremumNormalization(0.1),
 					# NiftiDataset.Normalization(),
-					NiftiDataset.Resample((0.75,0.75,0.75)),
+					NiftiDataset.Resample((0.25,0.25,0.25)),
 					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),

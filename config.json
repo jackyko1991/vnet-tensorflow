@@ -2,12 +2,12 @@
     "ProjectName": "VNet Tensorflow",
     "ProjectDetail": {
         "BodyPart": "Brain",
-        "Diseases": "Lacunar"
+        "Diseases": "stenosis"
     },    
     "TrainingSetting": {
         "Data": {
-            "ImageFilenames": ["t1_crop.nii.gz","flair_crop.nii.gz"],
-            "LabelFilename": "label_crop.nii.gz"
+            "ImageFilenames": ["CBCT_reg.nii"],
+            "LabelFilename": "3DRA_seg.nii.gz"
         }
     }
 }

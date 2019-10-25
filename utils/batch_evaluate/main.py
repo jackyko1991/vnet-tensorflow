@@ -127,19 +127,19 @@ def get_args():
 		default="./tmp"
 		)
 
-	# params = '--checkpoint_min 100000 \
-	# 	--stride_inplane_min 144 \
-	# 	--stride_inplane_max 144 \
-	# 	--stride_layer_min 12 \
-	# 	--stride_layer_max 12 \
-	# 	--patch_size 192 \
-	# 	--patch_layer 16 \
-	# 	--batch 5 \
-	# 	--data_dir ./data_WML/evaluate \
-	# 	--checkpoint_dir ./tmp/ckpt \
-	# '
-	# args = parser.parse_args(params.split())
-	args = parser.parse_args()
+	params = '--checkpoint_min 122455 \
+		--stride_inplane_min 192 \
+		--stride_inplane_max 192 \
+		--stride_layer_min 16 \
+		--stride_layer_max 16 \
+		--patch_size 192 \
+		--patch_layer 16 \
+		--batch 5 \
+		--data_dir ./data_WML/evaluate \
+		--checkpoint_dir ./tmp/ckpt \
+	'
+	args = parser.parse_args(params.split())
+	# args = parser.parse_args()
 
 	# print arguments if verbose
 	if args.verbose:
