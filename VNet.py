@@ -23,7 +23,6 @@
 import tensorflow as tf
 from Layers import convolution, down_convolution, up_convolution, get_num_channels,prelu
 
-
 def convolution_block(layer_input, num_convolutions, keep_prob, activation_fn, is_training):
     x = layer_input
     n_channels = get_num_channels(x)

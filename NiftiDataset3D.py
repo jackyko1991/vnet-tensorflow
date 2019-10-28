@@ -26,8 +26,9 @@ class NiftiDataset(object):
 		label_filename = '',
 		transforms=None,
 		train=False,
-		distmap=False,
-		sigma=2):
+		attention=False,
+		sigma=2,
+		labels=[0,1]):
 
 		# Init membership variables
 		self.data_dir = data_dir
@@ -35,32 +36,19 @@ class NiftiDataset(object):
 		self.label_filename = label_filename
 		self.transforms = transforms
 		self.train = train
-		self.distmap = distmap
 		self.sigma = sigma
+		self.labels=labels
 
 	def get_dataset(self):
-		image_paths = []
-		label_paths = []
-		for case in os.listdir(self.data_dir):
-			image_path_ = []
-			for image_channel in range(len(self.image_filenames)):
-				image_path_.append(os.path.join(self.data_dir,case,self.image_filenames[image_channel]))
-			image_paths.append(image_path_)
-			label_paths.append(os.path.join(self.data_dir,case,self.label_filename))
+		case_list = os.listdir(self.data_dir)
 
-		dataset = tf.data.Dataset.from_tensor_slices((image_paths,label_paths))
-
-		if self.distmap:
-			dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
-				self.input_parser, [image_path, label_path], [tf.float32,tf.int32,tf.float32])),
-				num_parallel_calls=multiprocessing.cpu_count())
-		else:
-			dataset = dataset.map(lambda image_path, label_path: tuple(tf.py_func(
-				self.input_parser, [image_path, label_path], [tf.float32,tf.int32])),
-				num_parallel_calls=multiprocessing.cpu_count())
+		dataset = tf.data.Dataset.from_tensor_slices(case_list)
+		dataset = dataset.map(lambda case: tuple(tf.py_func(
+			self.input_parser, [case], [tf.float32,tf.int32])),
+			num_parallel_calls=multiprocessing.cpu_count())
 
 		self.dataset = dataset
-		self.data_size = len(image_paths)
+		self.data_size = len(case_list)
 		return self.dataset
 
 	def read_image(self,path):
@@ -68,91 +56,93 @@ class NiftiDataset(object):
 		reader.SetFileName(path)
 		return reader.Execute()
 
-	def input_parser(self,image_path, label_path):
-		# read image and label
-		image = []
-		for image_channel in range(len(image_path)):
-			image_ = self.read_image(image_path[image_channel].decode("utf-8"))
-			image.append(image_)
+	def input_parser(self,case):
+		case = case.decode("utf-8")
 
-		# cast image and label
-		castImageFilter = sitk.CastImageFilter()
-		castImageFilter.SetOutputPixelType(sitk.sitkInt16)
-		for image_channel in range(len(image)):
-			image[image_channel] = castImageFilter.Execute(image[image_channel])
+		image_paths = []
+		for channel in range(len(self.image_filenames)):
+			image_paths.append(os.path.join(self.data_dir,case,self.image_filenames[channel]))
+
+		# read image and label
+		images = []
+		for channel in range(len(image_paths)):
+			image = self.read_image(image_paths[channel])
+			images.append(image)
+
+		for channel in range(len(images)):
 			# check header same
-			sameSize = image[image_channel].GetSize() == image[0].GetSize()
-			sameSpacing = image[image_channel].GetSpacing() == image[0].GetSpacing()
-			sameDirection = image[image_channel].GetDirection() == image[0].GetDirection()
+			sameSize = images[channel].GetSize() == images[0].GetSize()
+			sameSpacing = images[channel].GetSpacing() == images[0].GetSpacing()
+			sameDirection = images[channel].GetDirection() == images[0].GetDirection()
 			if sameSize and sameSpacing and sameDirection:
 				continue
 			else:
-				raise Exception('Header info inconsistent: {}'.format(image_path[image_channel]))
+				raise Exception('Header info inconsistent: {}'.format(image_paths[channel]))
 				exit()
 
-		if self.train:
-			label = self.read_image(label_path.decode("utf-8"))
-			castImageFilter.SetOutputPixelType(sitk.sitkInt8)
-			label = castImageFilter.Execute(label)
-		else:
-			label = sitk.Image(image.GetSize(),sitk.sitkInt8)
-			label.SetOrigin(image[0].GetOrigin())
-			label.SetSpacing(image[0].GetSpacing())
+		label = sitk.Image(images[0].GetSize(),sitk.sitkUInt8)
+		label.SetOrigin(images[0].GetOrigin())
+		label.SetSpacing(images[0].GetSpacing())
+		label.SetDirection(images[0].GetDirection())
 
-		sample = {'image':image, 'label':label}
+		if self.train:
+			label_ = self.read_image(os.path.join(self.data_dir,case, self.label_filename))
+
+			# chekc header same
+			sameSize = label_.GetSize() == images[0].GetSize()
+			sameSpacing = label_.GetSpacing() == images[0].GetSpacing()
+			sameDirection = label_.GetDirection() == images[0].GetDirection()
+			if not (sameSize and sameSpacing and sameDirection):
+				raise Exception('Header info inconsistent: {}'.format(os.path.join(self.data_dir,case, self.label_filename)))
+				exit()
+
+			thresholdFilter = sitk.BinaryThresholdImageFilter()
+			thresholdFilter.SetOutsideValue(0)
+			thresholdFilter.SetInsideValue(1)
+
+			castImageFilter = sitk.CastImageFilter()
+			castImageFilter.SetOutputPixelType(sitk.sitkUInt8)
+			for channel in range(len(self.labels)):
+				thresholdFilter.SetLowerThreshold(self.labels[channel])
+				thresholdFilter.SetUpperThreshold(self.labels[channel])
+				one_hot_label_image = thresholdFilter.Execute(label_)
+				multiFilter = sitk.MultiplyImageFilter()
+				one_hot_label_image = multiFilter.Execute(one_hot_label_image, channel)
+				# cast one_hot_label to sitkUInt8
+				one_hot_label_image = castImageFilter.Execute(one_hot_label_image)
+				one_hot_label_image.SetSpacing(images[0].GetSpacing())
+				one_hot_label_image.SetDirection(images[0].GetDirection())
+				one_hot_label_image.SetOrigin(images[0].GetOrigin())
+				addFilter = sitk.AddImageFilter()
+				label = addFilter.Execute(label,one_hot_label_image)
+
+		sample = {'image':images, 'label':label}
 
 		if self.transforms:
 			for transform in self.transforms:
 				try:
 					sample = transform(sample)
 				except:
-					print("Dataset preprocessing error: {}".format(os.path.dirname(image_path[0])))
+					print("Dataset preprocessing error: {}".format(case))
 					exit()
-
-		if self.distmap:
-			# create distance map
-			distFilter = sitk.DanielssonDistanceMapImageFilter()
-			distFilter.SetInputIsBinary(True)
-			distFilter.SetUseImageSpacing(True)
-			distMap = distFilter.Execute(sample['label'])
-			multiFilter = sitk.MultiplyImageFilter()
-			distMap = multiFilter.Execute(distMap,-1)
-
-			divFilter = sitk.DivideImageFilter()
-			distMap = divFilter.Execute(distMap,self.sigma) # sigma of the attention distribution
-			powFilter = sitk.PowImageFilter()
-			distMap = powFilter.Execute(distMap,2)
-			expFilter = sitk.ExpNegativeImageFilter()
-			distMap = expFilter.Execute(distMap)
-
-			# normalize data to 0-1
-			resacleFilter = sitk.RescaleIntensityImageFilter()
-			resacleFilter.SetOutputMaximum(1)
-			resacleFilter.SetOutputMinimum(0)
-			distMap = resacleFilter.Execute(distMap)
-		
+				
 		# convert sample to tf tensors
-		for image_channel in range(len(sample['image'])):
-			image_np_ = sitk.GetArrayFromImage(sample['image'][image_channel])
+		for channel in range(len(sample['image'])):
+			image_np_ = sitk.GetArrayFromImage(sample['image'][channel])
 			image_np_ = np.asarray(image_np_,np.float32)
 			# to unify matrix dimension order between SimpleITK([x,y,z]) and numpy([z,y,x])
 			image_np_ = np.transpose(image_np_,(2,1,0))
-			if image_channel == 0:
+			if channel == 0:
 				image_np = image_np_[:,:,:,np.newaxis]
 			else:
 				image_np = np.append(image_np,image_np_[:,:,:,np.newaxis],axis=-1)
-			
+
 		label_np = sitk.GetArrayFromImage(sample['label'])
 		label_np = np.asarray(label_np,np.int32)
+		# to unify matrix dimension order between SimpleITK([x,y,z]) and numpy([z,y,x])
 		label_np = np.transpose(label_np,(2,1,0))
 
-		if self.distmap:
-			distMap_np = sitk.GetArrayFromImage(distMap)
-			distMap_np = np.asarray(distMap_np,np.float32)
-			distMap_np = np.transpose(distMap_np,(2,1,0))
-			return image_np, label_np, distMap_np
-		else:
-			return image_np, label_np
+		return image_np, label_np
 
 class Normalization(object):
 	"""

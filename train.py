@@ -4,7 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-import NiftiDataset
+import NiftiDataset3D
 import os
 import VNet
 import math
@@ -19,13 +19,13 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1" # e.g. "0,1,2", "0,2"
 # tensorflow app flags
 FLAGS = tf.app.flags.FLAGS
 
-tf.app.flags.DEFINE_string('data_dir', './data',
+tf.app.flags.DEFINE_string('data_dir', './data_3DRA',
 	"""Directory of stored data.""")
 tf.app.flags.DEFINE_string('config_json','./config.json',
 	"""JSON file for filename configuration""")
 tf.app.flags.DEFINE_integer('batch_size',1,
 	"""Size of batch""")           
-tf.app.flags.DEFINE_integer('patch_size',128,
+tf.app.flags.DEFINE_integer('patch_size',256,
 	"""Size of a data patch""")
 tf.app.flags.DEFINE_integer('patch_layer',32,
 	"""Number of layers in data patch""")
@@ -205,20 +205,20 @@ def train():
 		with tf.device('/cpu:0'):
 			# create transformations to image and labels
 			trainTransforms = [
-				NiftiDataset.ExtremumNormalization(0.1),
+				NiftiDataset3D.ExtremumNormalization(0.1),
 				# NiftiDataset.Normalization(),
-				NiftiDataset.Resample((0.25,0.25,0.25)),
-				NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
-				# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
+				NiftiDataset3D.Resample((0.25,0.25,0.25)),
+				NiftiDataset3D.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
+				NiftiDataset3D.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
 				# NiftiDataset.BSplineDeformation(randomness=2),
 				# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.5)),
-				NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
-				NiftiDataset.RandomFlip([True, False, False]),
-				NiftiDataset.RandomNoise()
+				# NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
+				NiftiDataset3D.RandomFlip([True, False, False]),
+				NiftiDataset3D.RandomNoise()
 				]
 
-			TrainDataset = NiftiDataset.NiftiDataset(
+			TrainDataset = NiftiDataset3D.NiftiDataset(
 				data_dir=train_data_dir,
 				image_filenames=config['TrainingSetting']['Data']['ImageFilenames'],
 				label_filename=config['TrainingSetting']['Data']['LabelFilename'],
@@ -234,19 +234,19 @@ def train():
 			if FLAGS.testing:
 				# use random crop for testing
 				testTransforms = [
-					NiftiDataset.ExtremumNormalization(0.1),
+					NiftiDataset3D.ExtremumNormalization(0.1),
 					# NiftiDataset.Normalization(),
-					NiftiDataset.Resample((0.25,0.25,0.25)),
-					NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
-					# NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel)
+					NiftiDataset3D.Resample((0.25,0.25,0.25)),
+					NiftiDataset3D.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
+					NiftiDataset3D.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 					# NiftiDataset.BSplineDeformation(),
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.75,0.75,0.75)),
-					NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
-					NiftiDataset.RandomFlip([True, False, False]),
+					# NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
+					NiftiDataset3D.RandomFlip([True, False, False]),
 					]
 
-				TestDataset = NiftiDataset.NiftiDataset(
+				TestDataset = NiftiDataset3D.NiftiDataset(
 					data_dir=test_data_dir,
 					image_filenames=config['TrainingSetting']['Data']['ImageFilenames'],
 					label_filename=config['TrainingSetting']['Data']['LabelFilename'],
