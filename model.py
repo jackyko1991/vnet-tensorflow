@@ -204,7 +204,8 @@ class image2label(object):
 				sys.exit("2D training under development")
 			else:
 				trainTransforms = [
-					NiftiDataset3D.ExtremumNormalization(0.1),
+					# NiftiDataset3D.ExtremumNormalization(0.1),
+					NiftiDataset3D.ManualNormalization(-1024,1024),
 					# NiftiDataset.Normalization(),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
@@ -219,7 +220,8 @@ class image2label(object):
 
 				# use random crop for testing
 				testTransforms = [
-					NiftiDataset3D.ExtremumNormalization(0.1),
+					# NiftiDataset3D.ExtremumNormalization(0.1),
+					NiftiDataset3D.ManualNormalization(-1024,1024),
 					# NiftiDataset.Normalization(),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),

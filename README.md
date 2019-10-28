@@ -32,8 +32,8 @@ Here is an example graph of network this code implements. Channel depth may chan
 ## Usage
 ### Required Libraries
 Known good dependencies
-- Python 3.6
-- Tensorflow 1.5 or above
+- Python 3.7
+- Tensorflow 1.14 or above
 - SimpleITK
 
 ### Folder Hierarchy
@@ -73,53 +73,28 @@ If you wish to use image and label with filename other than `img.nii.gz` and `la
 
 In segmentation tasks, image and label are always in pair, missing either one would terminate the training process.
 
+The code has been tested with [LiTS dataset](http://academictorrents.com/details/27772adef6f563a1ecc0ae19a528b956e6c803ce)
+
 ### Training
 
-You may run train.py with commandline arguments. To check usage, type ```python train.py -h``` in terminal to list all possible training parameters.
+You may run train.py with commandline arguments. To check usage, type ```python main.py -h``` in terminal to list all possible training parameters.
 
 Available training parameters
 ```console
-  --data_dir: Directory of stored data.
-    (default: './data_3DRA')
-  --decay_factor: Exponential decay learning rate factor
-    (default: '0.99')
-  --decay_steps: Number of epoch before applying one learning rate decay
-    (default: '100')
-  --display_step: Display and logging interval (train steps)
-    (default: '10')
-  --drop_ratio: Probability to drop a cropped area if the label is empty. All empty patches will be dropped for 0 and accept all cropped patches if set to 1
-    (default: '0.01')
-  --epochs: Number of epochs for training
-    (default: '999999999')
-  --[no]image_log: Perform testing after each epoch
-    (default: 'true')
-  --init_learning_rate: Initial learning rate
-    (default: '0.01')
-  --log_dir: Directory where to write training and testing event logs
-    (default: './tmp/log')
-  --loss_function: Loss function used in optimization (xent, weight_xent, sorensen, jaccard)
-    (default: 'sorensen')
-  --min_pixel: Minimum non-zero pixels in the cropped label
-    (default: '30')
-  --model_dir: Directory to save model
-    (default: './tmp/model')
-  --momentum: Momentum used in optimization
-    (default: '0.5')
-  --optimizer: Optimization method (sgd, adam, momentum, nesterov_momentum)
-    (default: 'sgd')
-  --patch_layer: Number of layers in data patch
-    (default: '16')
-  --patch_size: Size of a data patch
-    (default: '192')
-  --restore_training: Restore training from last checkpoint
-    (default: 'true')
-  --save_interval: Checkpoint save interval (epochs)
-    (default: '1')
-  --shuffle_buffer_size: Number of elements used in shuffle buffer
-    (default: '5')
-  --[no]testing: Perform testing after each epoch
-    (default: 'false')
+  -h, --help            show this help message and exit
+  -v, --verbose         Show verbose output
+  -p [train evaluate], --phase [train evaluate]
+                        Training phase (default= train)
+  --config_json FILENAME
+                        JSON file for model configuration
+  --gpu GPU_IDs         Select GPU device(s) (default = 0)
  ```
+
+The program will read the configuration from `config.json`. Modify the necessary hyperparameters to suit your dataset.
+
+Note: You should always set label 0 as the first `SegmentationClasses` in `config.json`. Current model will only run properly with at least 2 classes.
+
+The software will automatically determine run in 2D or 3D mode according to rank of `PatchShape` in `config.json`
 
 #### Image batch preparation
 Typically medical image is large in size when comparing with natural images (height x width x layers x modality), where number of layers could up to hundred or thousands of slices. Also medical images are not bounded to unsigned char pixel type but accepts short, double or even float pixel type. This will consume large amount of GPU memories, which is a great barrier limiting the application of neural network in medical field.
@@ -135,11 +110,11 @@ Here we introduce serveral data augmentation skills that allow users to normaliz
 The preprocessing pipeline can easily be adjusted with following example code in `train.py`:
 ```python
 trainTransforms = [
-                NiftiDataset.Normalization(),
-                NiftiDataset.Resample(0.4356),
-                NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
-                NiftiDataset.RandomCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),FLAGS.drop_ratio,FLAGS.min_pixel),
-                NiftiDataset.RandomNoise()
+                NiftiDataset3D.Normalization(),
+                NiftiDataset3D.Resample(self.spacing[0],self.spacing[1],self.spacing[2]),
+                NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
+                NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio,self.min_pixel),
+                NiftiDataset3D.RandomNoise()
                 ]
 ```
 
@@ -159,9 +134,9 @@ Additional preprocessing classes:
   
   Example:
   ```python
-  NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
+  NiftiDataset.ConfidenceCrop((self.patch_shape[0]*2, self.patch_shape[1]*2, self.patch_shape[2]*2),(0.0001,0.0001,0.0001)),
   NiftiDataset.BSplineDeformation(),
-  NiftiDataset.ConfidenceCrop((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),(0.5,0.5,0.25)),
+  NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.5,0.5,0.25)),
   ```
   
 #### Tensorboard
@@ -192,7 +167,7 @@ You may change output label name by changing the line `writer.SetFileName(os.pat
 
 Note that you should keep preprocessing pipeline similar to the one in `train.py`, but without random cropping and noise.
 
-## C++ Inference
+## C++ Inference (Deprecated for newer version of Tensorflow)
 We provide a C++ inference example under directory [cxx](./cxx). For C++ implementation, please follow the guide [here](./cxx/README.md)
 
 ## Citations

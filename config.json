@@ -1,20 +1,20 @@
 {
     "ProjectName": "VNet Tensorflow",
     "ProjectDetail": {
-        "BodyPart": "Brain",
-        "Diseases": "stenosis"
+        "BodyPart": "Liver",
+        "Diseases": "Lesion"
     },    
     "TrainingSetting": {
         "Data": {
-            "TrainingDataDirectory":"./data_3DRA/training",
-            "TestingDataDirectory": "./data_3DRA/testing",
-            "ImageFilenames": ["CBCT_reg.nii"],
-            "LabelFilename": "3DRA_seg.nii.gz"
+            "TrainingDataDirectory":"./data/training",
+            "TestingDataDirectory": "./data/testing",
+            "ImageFilenames": ["image.nii"],
+            "LabelFilename": "label.nii"
         },
         "Restore": true,
-        "SegmentationClasses": [0,1],
-        "LogDir": "./tmp2/log",
-        "CheckpointDir": "./tmp2/ckpt",
+        "SegmentationClasses": [0,1,2],
+        "LogDir": "./tmp/log",
+        "CheckpointDir": "./tmp/ckpt",
         "BatchSize": 1,
         "PatchShape": [256,256,32],
         "ImageLog": true,
@@ -22,19 +22,19 @@
         "Epoches": 99999,
         "Networks": {
             "Name":"VNet",
-            "Dropout": 0.00,
-            "Attention": false
+            "Dropout": 0.00
         },
+        "Loss": "sorensen",
         "Optimizer":{
             "Name": "Adam",
-            "InitialLearningRate": 1e-5,
+            "InitialLearningRate": 1e-2,
             "Momentum":0.9,
             "Decay":{
                 "Factor": 0.99,
-                "Step": 100
+                "Steps": 100
             }
         },
-        "Spacing": [0.25,0.25,0.25],
+        "Spacing": [0.5,0.5,0.5],
         "DropRatio": 0.01,
         "MinPixel":30
     }

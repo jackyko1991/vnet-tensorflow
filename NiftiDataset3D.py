@@ -257,8 +257,8 @@ class ManualNormalization(object):
 		self.name = 'ManualNormalization'
 		assert isinstance(windowMax, (int,float))
 		assert isinstance(windowMin, (int,float))
-		self.windowMax = windowMax
-		self.windowMin = windowMin
+		self.windowMax = float(windowMax)
+		self.windowMin = float(windowMin)
 
 	def __call__(self, sample):
 		image, label = sample['image'], sample['label']
@@ -268,7 +268,8 @@ class ManualNormalization(object):
 		intensityWindowingFilter.SetWindowMaximum(self.windowMax);
 		intensityWindowingFilter.SetWindowMinimum(self.windowMin);
 
-		image = intensityWindowingFilter.Execute(image)
+		for channel in range(len(image)):
+			image[channel] = intensityWindowingFilter.Execute(image[channel])
 
 		return {'image': image, 'label': label}
 
