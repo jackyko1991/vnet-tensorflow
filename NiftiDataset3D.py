@@ -467,6 +467,13 @@ class RandomCrop(object):
 		# statFilter.Execute(label)
 		# print(statFilter.GetMaximum(), statFilter.GetSum())
 
+		binaryThresholdFilter = sitk.BinaryThresholdImageFilter()
+		binaryThresholdFilter.SetLowerThreshold(1)
+		binaryThresholdFilter.SetUpperThreshold(99999999999)
+		binaryThresholdFilter.SetInsideValue(1)
+		binaryThresholdFilter.SetOutsideValue(0)
+		label_ = binaryThresholdFilter.Execute(label)
+
 		while not contain_label: 
 			# get the start crop coordinate in ijk
 			if size_old[0] <= size_new[0]:
@@ -486,7 +493,7 @@ class RandomCrop(object):
 
 			roiFilter.SetIndex([start_i,start_j,start_k])
 
-			label_crop = roiFilter.Execute(label)
+			label_crop = roiFilter.Execute(label_)
 			statFilter = sitk.StatisticsImageFilter()
 			statFilter.Execute(label_crop)
 
@@ -498,10 +505,9 @@ class RandomCrop(object):
 			else:
 				contain_label = True
 
-		label = label_crop
-
 		for image_channel in range(len(image)):
 			image[image_channel] = roiFilter.Execute(image[image_channel])
+		label = roiFilter.Execute(label)
 
 		return {'image': image, 'label': label}
 
