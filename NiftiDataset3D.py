@@ -524,7 +524,7 @@ class RandomNoise(object):
 	def __call__(self, sample):
 		self.noiseFilter = sitk.AdditiveGaussianNoiseImageFilter()
 		self.noiseFilter.SetMean(0)
-		self.noiseFilter.SetStandardDeviation(1.0)
+		self.noiseFilter.SetStandardDeviation(0.1)
 
 		# print("Normalizing image...")
 		image, label = sample['image'], sample['label']
