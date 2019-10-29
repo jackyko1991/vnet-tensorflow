@@ -204,9 +204,10 @@ class image2label(object):
 				sys.exit("2D training under development")
 			else:
 				trainTransforms = [
-					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(-200,300),
 					# NiftiDataset.Normalization(),
+					# NiftiDataset3D.ExtremumNormalization(0.1),
+					# NiftiDataset3D.ManualNormalization(-200,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -220,9 +221,10 @@ class image2label(object):
 
 				# use random crop for testing
 				testTransforms = [
-					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(-200,300),
 					# NiftiDataset.Normalization(),
+					# NiftiDataset3D.ExtremumNormalization(0.1),
+					# NiftiDataset3D.ManualNormalization(-200,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -335,18 +337,28 @@ class image2label(object):
 		with tf.name_scope("metrics"):
 			correct_pred = tf.equal(tf.expand_dims(self.pred_op,-1), tf.cast(self.labels_placeholder,dtype=tf.int64))
 			accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-			tp, tp_op = tf.metrics.true_positives(self.labels_placeholder, self.pred_op, name="true_positives")
-			tn, tn_op = tf.metrics.true_negatives(self.labels_placeholder, self.pred_op, name="true_negatives")
-			fp, fp_op = tf.metrics.false_positives(self.labels_placeholder, self.pred_op, name="false_positives")
-			fn, fn_op = tf.metrics.false_negatives(self.labels_placeholder, self.pred_op, name="false_negatives")
-			sensitivity_op = tf.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.add(tp_op,fn_op),tf.float32))
-			specificity_op = tf.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.add(tn_op,fp_op),tf.float32))
-			dice_op = 2.*tp_op/(2.*tp_op+fp_op+fn_op)
 
-		tf.summary.scalar('accuracy', accuracy)
-		tf.summary.scalar('sensitivity', sensitivity_op)
-		tf.summary.scalar('specificity', specificity_op)
-		tf.summary.scalar('dice', dice_op)
+			tf.summary.scalar('accuracy', accuracy)
+
+			# confusion matrix
+			label_one_hot = tf.one_hot(self.labels_placeholder[:,:,:,:,0],depth=self.output_channel_num)
+			pred_one_hot = tf.one_hot(self.pred_op[:,:,:,:], depth=self.output_channel_num)
+
+			for i in range(self.output_channel_num):
+				if i == 0:
+					continue
+				else:
+					tp, tp_op = tf.metrics.true_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_positives_"+str(self.label_classes[i]))
+					tn, tn_op = tf.metrics.true_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_negatives_"+str(self.label_classes[i]))
+					fp, fp_op = tf.metrics.false_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_positives_"+str(self.label_classes[i]))
+					fn, fn_op = tf.metrics.false_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_negatives_"+str(self.label_classes[i]))
+					sensitivity_op = tf.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.add(tp_op,fn_op),tf.float32))
+					specificity_op = tf.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.add(tn_op,fp_op),tf.float32))
+					dice_op = 2.*tp_op/(2.*tp_op+fp_op+fn_op)
+				
+				tf.summary.scalar('sensitivity_'+str(self.label_classes[i]), sensitivity_op)
+				tf.summary.scalar('specificity_'+str(self.label_classes[i]), specificity_op)
+				tf.summary.scalar('dice_'+str(self.label_classes[i]), dice_op)
 
 		print("{}: Metrics complete".format(datetime.datetime.now()))
 

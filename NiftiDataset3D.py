@@ -469,7 +469,7 @@ class RandomCrop(object):
 
 		binaryThresholdFilter = sitk.BinaryThresholdImageFilter()
 		binaryThresholdFilter.SetLowerThreshold(1)
-		binaryThresholdFilter.SetUpperThreshold(99999999999)
+		binaryThresholdFilter.SetUpperThreshold(255)
 		binaryThresholdFilter.SetInsideValue(1)
 		binaryThresholdFilter.SetOutsideValue(0)
 		label_ = binaryThresholdFilter.Execute(label)
@@ -524,7 +524,7 @@ class RandomNoise(object):
 	def __call__(self, sample):
 		self.noiseFilter = sitk.AdditiveGaussianNoiseImageFilter()
 		self.noiseFilter.SetMean(0)
-		self.noiseFilter.SetStandardDeviation(0.1)
+		self.noiseFilter.SetStandardDeviation(1.0)
 
 		# print("Normalizing image...")
 		image, label = sample['image'], sample['label']
