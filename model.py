@@ -205,7 +205,7 @@ class image2label(object):
 			else:
 				trainTransforms = [
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(-1024,1024),
+					NiftiDataset3D.ManualNormalization(-200,300),
 					# NiftiDataset.Normalization(),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
@@ -221,7 +221,7 @@ class image2label(object):
 				# use random crop for testing
 				testTransforms = [
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(-1024,1024),
+					NiftiDataset3D.ManualNormalization(-200,300),
 					# NiftiDataset.Normalization(),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
@@ -324,7 +324,11 @@ class image2label(object):
 
 		if self.image_log:
 			for batch in range(self.batch_size):
-				pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*255, dtype=tf.uint8)
+				if 0 in self.label_classes:
+					pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*math.floor(255/(self.output_channel_num-1)), dtype=tf.uint8)
+				else:
+					pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*math.floor(255/(self.output_channel_num)), dtype=tf.uint8)
+				
 				tf.summary.image("pred", tf.transpose(pred_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
 
 		# accuracy of the model
@@ -435,6 +439,8 @@ class image2label(object):
 				self.sess.run(self.test_iterator.initializer)
 
 			# training phase
+			loss_sum = 0
+			count = 0
 			while True:
 				try:
 					self.sess.run(tf.local_variables_initializer())
@@ -450,9 +456,14 @@ class image2label(object):
 						})
 					print('{}: Segmentation loss: {}'.format(datetime.datetime.now(), str(loss)))
 
+					loss_sum += loss
+					count += 1
+
 					train_summary_writer.add_summary(summary,global_step=tf.train.global_step(self.sess,self.global_step_op))
 					train_summary_writer.flush()
 				except tf.errors.OutOfRangeError:
+					print("{}: Training of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
+
 					start_epoch_inc.op.run()
 					self.network.is_training = False;
 					# print(start_epoch.eval())
@@ -465,6 +476,39 @@ class image2label(object):
 						latest_filename="checkpoint-latest")
 					print("{}: Saving checkpoint succeed".format(datetime.datetime.now()))
 					break
+
+			# testing phase
+			if self.testing:
+				loss_sum = 0
+				count = 0
+				while True:
+					try:
+						self.sess.run(tf.local_variables_initializer())
+						self.network.is_training = False
+						image, label = self.sess.run(self.next_element_test)
+						label = label[:,:,:,:,np.newaxis]
+
+						summary, loss = self.sess.run([summary_op, self.loss_op],feed_dict={
+							self.images_placeholder: image,
+							self.labels_placeholder: label,
+							self.network.train_phase: False
+						})
+
+						print('{}: Segmentation loss: {}'.format(datetime.datetime.now(), str(loss)))
+
+						loss_sum += loss
+						count += 1
+
+						test_summary_writer.add_summary(summary, global_step=tf.train.global_step(self.sess, self.global_step_op))
+						test_summary_writer.flush()
+					except tf.errors.OutOfRangeError:
+						print("{}: Testing of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
+						break
+
+		# close tensorboard summary writer
+		train_summary_writer.close()
+		if self.testing:
+			test_summary_writer.close()
 
 	def evaluate(self):
 		sys.exit("evaluation under development")
