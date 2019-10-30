@@ -7,6 +7,9 @@ import datetime
 import numpy as np
 import networks
 import math
+import SimpleITK as sitk
+import multiprocessing
+from tqdm import tqdm
 
 def grayscale_to_rainbow(image):
 	# grayscale to rainbow colormap, convert to HSV (H = reversed grayscale from 0:2/3, S and V are all 1)
@@ -68,6 +71,29 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
     dice = tf.reduce_mean(dice, name='dice_coe')
     return dice
 
+def prepare_batch(image_ijk_patch_indices_dict):
+	# image_batches = []
+	# for batch in ijk_patch_indices:
+	# 	image_batch = []
+	# 	for patch in batch:
+	# 		image_patch = images[patch[0]:patch[1],patch[2]:patch[3],patch[4]:patch[5],:]
+	# 		image_batch.append(image_patch)
+
+	# 	image_batch = np.asarray(image_batch)
+	# 	image_batches.append(image_batch)
+	
+	images, ijk_patch_indices = image_ijk_patch_indices_dict['images'], image_ijk_patch_indices_dict['indexes']
+
+	# return image_batches
+	image_batch = []
+	for patch in ijk_patch_indices:
+		image_patch = images[patch[0]:patch[1],patch[2]:patch[3],patch[4]:patch[5],:]
+		image_batch.append(image_patch)
+
+	image_batch = np.asarray(image_batch)
+		
+	return image_batch
+
 class image2label(object):
 	def __init__(self,sess,config):
 		"""
@@ -85,6 +111,7 @@ class image2label(object):
 	def read_config(self):
 		print("{}: Reading configuration file...".format(datetime.datetime.now()))
 
+		# training config
 		self.input_channel_num = len(self.config['TrainingSetting']['Data']['ImageFilenames'])
 		self.output_channel_num = len(self.config['TrainingSetting']['SegmentationClasses'])
 		self.label_classes = self.config['TrainingSetting']['SegmentationClasses']
@@ -117,6 +144,17 @@ class image2label(object):
 		self.min_pixel = self.config['TrainingSetting']['MinPixel']
 
 		self.loss_name = self.config['TrainingSetting']['Loss']
+
+		# evaluation config
+		self.checkpoint_path = self.config['EvaluationSetting']['CheckpointPath']
+		self.evaluate_data_dir = self.config['EvaluationSetting']['Data']['EvaluateDataDirectory']
+		self.evaluate_image_filenames = self.config['EvaluationSetting']['Data']['ImageFilenames']
+		self.evaluate_label_filename = self.config['EvaluationSetting']['Data']['LabelFilename']
+		self.evaluate_probability_filename = self.config['EvaluationSetting']['Data']['ProbabilityFilename']
+		self.evaluate_stride = self.config['EvaluationSetting']['Stride']
+		self.evaluate_batch = self.config['EvaluationSetting']['BatchSize']
+		self.evaluate_probability_output = self.config['EvaluationSetting']['ProbabilityOutput']
+
 		print("{}: Reading configuration file complete".format(datetime.datetime.now()))
 
 	def placeholder_inputs(self, input_batch_shape, output_batch_shape):
@@ -523,4 +561,213 @@ class image2label(object):
 			test_summary_writer.close()
 
 	def evaluate(self):
-		sys.exit("evaluation under development")
+		# read config to class variables
+		self.read_config()
+
+		"""evaluate the vnet model by stepwise moving along the 3D image"""
+		# restore model graph and checkpoint
+		# tf.reset_default_graph()
+		imported_meta = tf.train.import_meta_graph(self.checkpoint_path + ".meta")
+		imported_meta.restore(self.sess, self.checkpoint_path)
+		print("{}: Restore checkpoint success".format(datetime.datetime.now()))
+
+		# create transformation on images and labels
+		transforms = [
+			NiftiDataset3D.StatisticalNormalization(2.5),
+			NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
+			NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
+		]
+
+		# start evaluation
+		print("{}: Start evaluation...".format(datetime.datetime.now()))
+
+		for case in os.listdir(self.evaluate_data_dir):
+			# check image data exists
+			image_paths = []
+			image_file_exists = True
+			for channel in range(self.input_channel_num):
+				image_paths.append(os.path.join(self.evaluate_data_dir,case,self.evaluate_image_filenames[channel]))
+				if not os.path.exists(image_paths[channel]):
+					image_file_exists = False
+					break
+			if not image_file_exists:
+				print("{}: Image file not found at {}".format(datetime.datetime.now(),os.path.dirname(image_paths[0])))
+				break
+
+			print("{}: Evaluating image at {}".format(datetime.datetime.now(),os.path.dirname(image_paths[0])))
+
+			# read image file
+			images = []
+			images_tfm = []
+
+			reader = sitk.ImageFileReader()
+			for channel in range(self.input_channel_num):
+				reader.SetFileName(image_paths[channel])
+				image = reader.Execute()
+				images.append(image)
+				images_tfm.append(image)
+
+			# create empty label in pair with the transformed image
+			label_tfm = sitk.Image(images[0].GetSize(),sitk.sitkUInt8)
+			label_tfm.SetOrigin(images[0].GetOrigin())
+			label_tfm.SetDirection(images[0].GetDirection())
+			label_tfm.SetSpacing(images[0].GetSpacing())
+
+			sample = {'image':images_tfm, 'label': label_tfm}
+
+			for transform in transforms:
+				sample = transform(sample)
+
+			if self.evaluate_probability_output:
+				# create empty softmax image in pair with transformed image
+				softmax_tfm = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
+				softmax_tfm.SetOrigin(images[0].GetOrigin())
+				softmax_tfm.SetDirection(images[0].GetDirection())
+				softmax_tfm.SetSpacing(images[0].GetSpacing())
+
+			# convert image to numpy array
+			for channel in range(self.input_channel_num):
+				image_ = sitk.GetArrayFromImage(images_tfm[channel])
+				if channel == 0:
+					images_np = image_[:,:,:,np.newaxis]
+				else:
+					images_np = np.append(images_np, image_[:,:,:,np.newaxis], axis=-1)
+
+			images_np = np.asarray(images_np,np.float32)
+			label_np = sitk.GetArrayFromImage(label_tfm)
+			label_np = np.asarray(label_np,np.int32)
+
+			if self.evaluate_probability_output:
+				softmax_np = sitk.GetArrayFromImage(softmax_tfm)
+				softmax_np = np.asarray(softmax_np,np.float32)
+
+			# unify numpy and sitk orientation
+			images_np = np.transpose(images_np,(2,1,0,3))
+			label_np = np.transpose(label_np,(2,1,0))
+			if self.evaluate_probability_output:
+				softmax_np = np.transpose(softmax_np,(2,1,0))
+
+			# a weighting matrix will be used for averaging the overlapped region
+			weight_np = np.zeros(label_np.shape)
+
+			# prepare image batch indices
+			inum = int(math.ceil((images_np.shape[0]-self.patch_shape[0])/float(self.evaluate_stride[0]))) + 1 
+			jnum = int(math.ceil((images_np.shape[1]-self.patch_shape[1])/float(self.evaluate_stride[1]))) + 1
+			knum = int(math.ceil((images_np.shape[2]-self.patch_shape[2])/float(self.evaluate_stride[2]))) + 1
+
+			patch_total = 0
+			image_ijk_patch_indices_dicts = []
+			ijk_patch_indicies_tmp = []
+
+			for i in range(inum):
+				for j in range(jnum):
+					for k in range (knum):
+						if patch_total % self.evaluate_batch == 0:
+							ijk_patch_indicies_tmp = []
+
+						istart = i * self.evaluate_stride[0]
+						if istart + self.patch_shape[0] > images_np.shape[0]: #for last patch
+							istart = images_np.shape[0] - self.patch_shape[0]
+						iend = istart + self.patch_shape[0]
+
+						jstart = j * self.evaluate_stride[1]
+						if jstart + self.patch_shape[1] > images_np.shape[1]: #for last patch
+							jstart = images_np.shape[1] - self.patch_shape[1]
+						jend = jstart + self.patch_shape[1]
+
+						kstart = k * self.evaluate_stride[2]
+						if kstart + self.patch_shape[2] > images_np.shape[2]: #for last patch
+							kstart = images_np.shape[2] - self.patch_shape[2] 
+						kend = kstart + self.patch_shape[2]
+
+						ijk_patch_indicies_tmp.append([istart, iend, jstart, jend, kstart, kend])
+
+						if patch_total % self.evaluate_batch == 0:
+							image_ijk_patch_indices_dicts.append({'images': images_np, 'indexes':ijk_patch_indicies_tmp})
+
+						patch_total += 1
+
+			# for last batch
+			image_ijk_patch_indices_dicts.append({'images': images_np, 'indexes':ijk_patch_indicies_tmp})
+
+			p = multiprocessing.Pool(multiprocessing.cpu_count())
+			batches = p.map(prepare_batch,image_ijk_patch_indices_dicts)
+			p.close()
+			p.join()
+
+			# acutal segmentation
+			for i in tqdm(range(len(batches))):
+				batch = batches[i]
+
+				if self.evaluate_probability_output:
+					[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
+						'images_placeholder:0': batch, 
+						'train_phase_placeholder:0': False})
+				else:
+					pred = self.sess.run('predicted_label/prediction:0', feed_dict={
+						'images_placeholder:0': batch, 
+						'train_phase_placeholder:0': False})
+
+				for j in range(pred.shape[0]):
+					istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
+					iend = image_ijk_patch_indices_dicts[i]['indexes'][j][1]
+					jstart = image_ijk_patch_indices_dicts[i]['indexes'][j][2]
+					jend = image_ijk_patch_indices_dicts[i]['indexes'][j][3]
+					kstart = image_ijk_patch_indices_dicts[i]['indexes'][j][4]
+					kend = image_ijk_patch_indices_dicts[i]['indexes'][j][5]
+
+					label_np[istart:iend,jstart:jend,kstart:kend] += pred[j,:,:,:]
+					if self.evaluate_probability_output:
+						softmax_np[istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,1]
+					weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
+
+			print("{}: Evaluation complete".format(datetime.datetime.now()))
+			# eliminate overlapping region using the weighted value
+			label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+			if self.evaluate_probability_output:
+				softmax_np = softmax_np/np.float32(weight_np)
+
+			# convert back to sitk space
+			label_np = np.transpose(label_np,(2,1,0))
+			if self.evaluate_probability_output:
+				softmax_np = np.transpose(softmax_np,(2,1,0))
+
+			# convert label numpy back to sitk image
+			label_tfm = sitk.GetImageFromArray(label_np)
+			label_tfm.SetOrigin(images_tfm[0].GetOrigin())
+			label_tfm.SetDirection(images_tfm[0].GetDirection())
+			label_tfm.SetSpacing(images_tfm[0].GetSpacing())
+
+			if self.evaluate_probability_output:
+				softmax_tfm = sitk.GetImageFromArray(softmax_np)
+				softmax_tfm.SetOrigin(images_tfm[0].GetOrigin())
+				softmax_tfm.SetDirection(images_tfm[0].GetDirection())
+				softmax_tfm.SetSpacing(images_tfm[0].GetSpacing())
+
+			# resample the label back to original space
+			resampler = sitk.ResampleImageFilter()
+			# save segmented label
+			writer = sitk.ImageFileWriter()
+
+			resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+			resampler.SetOutputSpacing(images[0].GetSpacing())
+			resampler.SetSize(images[0].GetSize())
+			resampler.SetOutputOrigin(images[0].GetOrigin())
+			resampler.SetOutputDirection(images[0].GetDirection())
+
+			print("{}: Resampling label back to original image space...".format(datetime.datetime.now()))
+			label = resampler.Execute(label_tfm)
+			label_path = os.path.join(self.evaluate_data_dir,case,self.evaluate_label_filename)
+			writer.SetFileName(label_path)
+			writer.Execute(label)
+
+			print("{}: Save evaluate label at {} success".format(datetime.datetime.now(),label_path))
+
+			if self.evaluate_probability_output:
+				resampler.SetInterpolator(sitk.sitkLinear)
+				print("{}: Resampling probability map back to original image space...".format(datetime.datetime.now()))
+				prob = resampler.Execute(softmax_tfm)
+				prob_path = os.path.join(self.evaluate_data_dir,case,self.evaluate_probability_filename)
+				writer.SetFileName(prob_path)
+				writer.Execute(prob)
+				print("{}: Save evaluate probability map at {} success".format(datetime.datetime.now(),prob_path))

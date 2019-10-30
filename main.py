@@ -73,8 +73,10 @@ def main(args):
 		model = image2label(sess,config)
 		if args.phase == "train":
 			model.train()
-		else:
+		elif args.phase == "evaluate":
 			model.evaluate()
+		else:
+			sys.exit("Invalid training phase")
 
 if __name__=="__main__":
 	args = get_parser()

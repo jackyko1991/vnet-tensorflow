@@ -1,28 +1,28 @@
 {
     "ProjectName": "VNet Tensorflow",
     "ProjectDetail": {
-        "BodyPart": "Liver",
-        "Diseases": "Lesion"
+        "BodyPart": "Brain",
+        "Diseases": "Stenosis"
     },    
     "TrainingSetting": {
         "Data": {
-            "TrainingDataDirectory":"./data/training",
-            "TestingDataDirectory": "./data/testing",
-            "ImageFilenames": ["image.nii"],
-            "LabelFilename": "label.nii"
+            "TrainingDataDirectory":"./data_3DRA/training",
+            "TestingDataDirectory": "./data_3DRA/testing",
+            "ImageFilenames": ["CBCT_reg.nii"],
+            "LabelFilename": "3DRA_seg.nii.gz"
         },
         "Restore": true,
-        "SegmentationClasses": [0,1,2],
+        "SegmentationClasses": [0,1],
         "LogDir": "./tmp/log",
         "CheckpointDir": "./tmp/ckpt",
         "BatchSize": 1,
         "PatchShape": [256,256,32],
-        "ImageLog": true,
-        "Testing": false,
+        "ImageLog": false,
+        "Testing": true,
         "Epoches": 99999,
         "Networks": {
             "Name":"VNet",
-            "Dropout": 0.00
+            "Dropout": 0.001
         },
         "Loss": "sorensen",
         "Optimizer":{
@@ -34,8 +34,20 @@
                 "Steps": 100
             }
         },
-        "Spacing": [0.5,0.5,0.5],
+        "Spacing": [0.25,0.25,0.25],
         "DropRatio": 0.01,
         "MinPixel":30
+    },
+    "EvaluationSetting":{
+        "Data":{
+            "EvaluateDataDirectory": "./data_3DRA/evaluate",
+            "ImageFilenames": ["CBCT_reg.nii"],
+            "LabelFilename": "label_tf.nii.gz",
+            "ProbabilityFilename": "probability_tf.nii.gz"
+        },
+        "CheckpointPath": "./tmp/ckpt/checkpoint-23125",
+        "Stride": [256,256,32],
+        "BatchSize": 10,
+        "ProbabilityOutput":true
     }
 }
