@@ -55,11 +55,11 @@ class NiftiDataset(object):
 			pbar.set_description("Loading {}...".format(case))
 
 			label = self.read_image(os.path.join(self.data_dir,case,self.label_filename))
-			for i in range(image.GetSize()[2]):
+			for i in range(label.GetSize()[2]):
 				# check if the slice contains label
 				extractor = sitk.ExtractImageFilter()
-				size = [images[0].GetSize()[0],images[0].GetSize()[1],0]
-				index = [0,0,int(slice_num)]
+				size = [label.GetSize()[0],label.GetSize()[1],0]
+				index = [0,0,i]
 				extractor.SetSize(size)
 				extractor.SetIndex(index)
 				label_ = extractor.Execute(label)
