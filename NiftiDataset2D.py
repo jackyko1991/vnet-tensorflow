@@ -54,9 +54,30 @@ class NiftiDataset(object):
 		for case in pbar:
 			pbar.set_description("Loading {}...".format(case))
 
-			image = self.read_image(os.path.join(self.data_dir,case,self.image_filenames[0]))
+			label = self.read_image(os.path.join(self.data_dir,case,self.label_filename))
 			for i in range(image.GetSize()[2]):
-				slices_list.append([case,i])
+				# check if the slice contains label
+				extractor = sitk.ExtractImageFilter()
+				size = [images[0].GetSize()[0],images[0].GetSize()[1],0]
+				index = [0,0,int(slice_num)]
+				extractor.SetSize(size)
+				extractor.SetIndex(index)
+				label_ = extractor.Execute(label)
+
+				binaryThresholdFilter = sitk.BinaryThresholdImageFilter()
+				binaryThresholdFilter.SetLowerThreshold(1)
+				binaryThresholdFilter.SetUpperThreshold(255)
+				binaryThresholdFilter.SetInsideValue(1)
+				binaryThresholdFilter.SetOutsideValue(0)
+				label_ = binaryThresholdFilter.Execute(label_)
+
+				statFilter = sitk.StatisticsImageFilter()
+				statFilter.Execute(label_)
+
+				if statFilter.GetSum() > 1:
+					slices_list.append([case,i])
+				else:
+					continue
 
 		# randomize the slices
 		random.shuffle(slices_list)
