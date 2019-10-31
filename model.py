@@ -141,6 +141,7 @@ class image2label(object):
 		self.log_dir = self.config['TrainingSetting']['LogDir']
 		self.ckpt_dir = self.config['TrainingSetting']['CheckpointDir']
 		self.epoches = self.config['TrainingSetting']['Epoches']
+		self.log_interval = self.config['TrainingSetting']['LogInterval']
 
 		self.network_name = self.config['TrainingSetting']['Networks']['Name']
 		self.dropout_rate = self.config['TrainingSetting']['Networks']['Dropout']
@@ -598,6 +599,16 @@ class image2label(object):
 
 					train_summary_writer.add_summary(summary,global_step=tf.train.global_step(self.sess,self.global_step_op))
 					train_summary_writer.flush()
+
+					# save checkpoint
+					if self.global_step_op.run()%self.log_interval == 0:
+						print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,self.ckpt_dir))
+						if not (os.path.exists(self.ckpt_dir)):
+							os.makedirs(self.ckpt_dir,exist_ok=True)
+						saver.save(self.sess, checkpoint_prefix, 
+							global_step=tf.train.global_step(self.sess, self.global_step_op),
+							latest_filename="checkpoint-latest")
+						
 				except tf.errors.OutOfRangeError:
 					print("{}: Training of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
 

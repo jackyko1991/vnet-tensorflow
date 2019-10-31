@@ -20,6 +20,7 @@
         "ImageLog": false,
         "Testing": true,
         "Epoches": 99999,
+        "LogInterval": 50,
         "Networks": {
             "Name":"VNet",
             "Dropout": 0.01
