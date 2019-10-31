@@ -285,8 +285,8 @@ class image2label(object):
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -302,8 +302,8 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -602,7 +602,7 @@ class image2label(object):
 
 					# save checkpoint
 					if self.global_step_op.eval()%self.log_interval == 0:
-						print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,self.ckpt_dir))
+						print("{}: Saving checkpoint of step {} at {}...".format(datetime.datetime.now(),self.global_step_op.eval(),self.ckpt_dir))
 						if not (os.path.exists(self.ckpt_dir)):
 							os.makedirs(self.ckpt_dir,exist_ok=True)
 						saver.save(self.sess, checkpoint_prefix, 
