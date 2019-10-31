@@ -4,13 +4,13 @@ Tensorflow implementation of the V-Net architecture for medical imaging segmenta
 ## Tensorflow implementation of V-Net
 This is a Tensorflow implementation of the [V-Net](https://arxiv.org/abs/1606.04797) architecture used for 3D medical imaging segmentation. This code adopts the tensorflow graph from https://github.com/MiguelMonteiro/VNet-Tensorflow. The repository covers training, evaluation and prediction modules for the (multimodal) 3D medical image segmentation in multiple classes.
 
-### Visual Represetation of Network
+### Visual Representation of Network
 Here is an example graph of network this code implements. Channel depth may change owning to change in modality number and class number.
 ![VNetDiagram](VNetDiagram.png)
 
 ### Features
-- 3D data processing ready
-- Augumented patching technique, requires less image input for training
+- 2D and 3D data processing ready
+- Augmented patching technique, requires less image input for training
 - Multichannel input and multiclass output
 - Generic image reader with SimpleITK support (Currently only support .nii/.nii.gz format for convenience, easy to expand to DICOM, tiff and jpg format)
 - Medical image pre-post processing with SimpleITK filters
@@ -25,9 +25,9 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [x] Resume training from checkpoint
 - [x] Epoch training
 - [x] Evaluation from single data
-- [ ] Multichannel input
+- [x] Multichannel input
 - [x] Multiclass output
-- [x] C++ inference
+- [x] C++ inference (Deprecated)
 
 ## Usage
 ### Required Libraries
@@ -70,6 +70,8 @@ If you wish to use image and label with filename other than `img.nii.gz` and `la
 "ImageFilenames": ["img.nii.gz"],
 "LabelFilename": "label.nii.gz"
 ```
+
+The network will automatically select 2D/3D mode by the length of `PatchShape` in `config.json`
 
 In segmentation tasks, image and label are always in pair, missing either one would terminate the training process.
 
@@ -117,6 +119,8 @@ trainTransforms = [
                 NiftiDataset3D.RandomNoise()
                 ]
 ```
+
+For 2D image training mode, you need to provide transforms in 2D and 3D separately.
 
 To write you own preprocessing pipeline, you need to modify the preprocessing classes in `NiftiDataset.py`
 
