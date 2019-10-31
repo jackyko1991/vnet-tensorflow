@@ -211,7 +211,7 @@ class image2label(object):
 		
 		dataset = Dataset.get_dataset()
 		if self.dimension == 2:
-			dataset = dataset.shuffle(buffer_size=20)
+			dataset = dataset.shuffle(buffer_size=50)
 		else:
 			dataset = dataset.shuffle(buffer_size=3)
 		dataset = dataset.batch(self.batch_size,drop_remainder=True)
