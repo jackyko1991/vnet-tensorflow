@@ -2,6 +2,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 import tensorflow as tf
 import NiftiDataset3D
+import NiftiDataset2D
 import sys
 import datetime
 import numpy as np
@@ -179,19 +180,30 @@ class image2label(object):
 
 	def dataset_iterator(self, data_dir, transforms, train=True):
 		if self.dimension==2:
-			Dataset = NiftiDataset2D.NiftiDataset()
+			Dataset = NiftiDataset2D.NiftiDataset(
+					data_dir=data_dir,
+					image_filenames=self.image_filenames,
+					label_filename=self.label_filename,
+					transforms3D=transforms['3D'],
+					transforms2D=transforms['2D'],
+					train=train,
+					labels=self.label_classes
+				)
 		else:
 			Dataset = NiftiDataset3D.NiftiDataset(
 				data_dir=data_dir,
 				image_filenames=self.image_filenames,
 				label_filename=self.label_filename,
 				transforms=transforms,
-				train=True,
+				train=train,
 				labels=self.label_classes
 			)
 		
 		dataset = Dataset.get_dataset()
-		dataset = dataset.shuffle(buffer_size=1)
+		if self.dimension == 2:
+			dataset = dataset.shuffle(buffer_size=20)
+		else:
+			dataset = dataset.shuffle(buffer_size=3)
 		dataset = dataset.batch(self.batch_size,drop_remainder=True)
 
 		return dataset.make_initializable_iterator()
@@ -219,9 +231,9 @@ class image2label(object):
 					image_log = tf.cast(self.images_placeholder[:,:,:,image_channel:image_channel+1], dtype=tf.uint8)
 					tf.summary.image(self.image_filenames[image_channel], image_log, max_outputs=self.batch_size)
 				if 0 in self.label_classes:
-					labels_log = tf.cast(tf.argmax(self.labels_placeholder,axis=-1)*math.floor(255/(self.output_channel_num-1)), dtype=tf.uint8)
+					labels_log = tf.cast(self.labels_placeholder*math.floor(255/(self.output_channel_num-1)), dtype=tf.uint8)
 				else:
-					labels_log = tf.cast(tf.argmax(self.labels_placeholder,axis=-1)*math.floor(255/self.output_channel_num), dtype=tf.uint8)
+					labels_log = tf.cast(self.labels_placeholder*math.floor(255/self.output_channel_num), dtype=tf.uint8)
 				tf.summary.image("label",labels_log, max_outputs=self.batch_size)
 			else:
 				for batch in range(self.batch_size):
@@ -239,13 +251,32 @@ class image2label(object):
 		# Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
 		with tf.device('/cpu:0'):
 			if self.dimension == 2:
-				sys.exit("2D training under development")
+				train_transforms_3d = []
+				
+				train_transforms_2d = [
+					NiftiDataset2D.ManualNormalization(0,300),
+					NiftiDataset2D.Resample(self.spacing),
+					NiftiDataset2D.Padding(self.patch_shape),
+					NiftiDataset2D.RandomCrop(self.patch_shape)
+				]
+
+				test_transforms_3d = []
+
+				test_transforms_2d = [
+					NiftiDataset2D.ManualNormalization(0,300),
+					NiftiDataset2D.Resample(self.spacing),
+					NiftiDataset2D.Padding(self.patch_shape),
+					NiftiDataset2D.RandomCrop(self.patch_shape)
+				]
+
+				trainTransforms = {"3D": train_transforms_3d, "2D": train_transforms_2d}
+				testTransforms = {"3D": test_transforms_3d, "2D": test_transforms_2d}
 			else:
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(-200,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -261,8 +292,8 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(-200,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -311,7 +342,11 @@ class image2label(object):
 
 		if self.image_log:
 			if self.dimension == 2:
-				sys.exit("To be developed")
+				for output_channel in range(self.output_channel_num):
+					# softmax_log = grayscale_to_rainbow(self.softmax_op[:,:,:,output_channel:output_channel+1])
+					softmax_log = self.softmax_op[:,:,:,output_channel:output_channel+1]
+					softmax_log = tf.cast(softmax_log*255, dtype = tf.uint8)
+					tf.summary.image("softmax_" + str(self.label_classes[output_channel]),softmax_log,max_outputs=self.batch_size)
 			else:
 				for batch in range(self.batch_size):
 					for output_channel in range(self.output_channel_num):
@@ -328,28 +363,35 @@ class image2label(object):
 				method 1: exclude the 0-th label in dice calculation. to use this method properly, you must set 0 as the first value in SegmentationClasses in config.json
 				method 2: dice will be average on all classes
 			"""
-			labels = tf.one_hot(self.labels_placeholder[:,:,:,:,0], depth=self.output_channel_num)
+			if self.dimension == 2:
+				labels = tf.one_hot(self.labels_placeholder[:,:,:,0], depth=self.output_channel_num)
+			else:
+				labels = tf.one_hot(self.labels_placeholder[:,:,:,:,0], depth=self.output_channel_num)
 
 			if 0 in self.label_classes:
 				################### method 1 ###################
 				if self.dimension ==2:
-					exit()
+					labels = labels[:,:,:,1:]
+					softmax = self.softmax_op[:,:,:,1:]
 				else:
 					labels = labels[:,:,:,:,1:]
 					softmax = self.softmax_op[:,:,:,:,1:]
 			else:
 				################### method 2 ###################
-				if self.dimension ==2:
-					exit()
-				else:
-					labels = labels
-					softmax = self.softmax_op
+				labels = labels
+				softmax = self.softmax_op
 
 			if (self.loss_name == "sorensen"):
-				sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen')
+				if self.dimension == 2:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen',axis=(1,2))
+				else:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen')
 				self.loss_op = 1. - sorensen
 			elif (self.loss_name == "jaccard"):
-				jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
+				if self.dimension == 2:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2))
+				else:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
 				self.loss_op = 1. - jaccard
 			else:
 				sys.exit("Invalid loss function")
@@ -363,13 +405,21 @@ class image2label(object):
 			self.pred_op = tf.argmax(self.logits, axis=-1 , name="prediction")
 
 		if self.image_log:
-			for batch in range(self.batch_size):
+			if self.dimension == 2:
 				if 0 in self.label_classes:
-					pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*math.floor(255/(self.output_channel_num-1)), dtype=tf.uint8)
+					pred_log = tf.cast(self.pred_op*math.floor(255/(self.output_channel_num-1)),dtype=tf.uint8)
 				else:
-					pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*math.floor(255/(self.output_channel_num)), dtype=tf.uint8)
-				
-				tf.summary.image("pred", tf.transpose(pred_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
+					pred_log = tf.cast(self.pred_op*math.floor(255/self.output_channel_num),dtype=tf.uint8)
+				pred_log = tf.expand_dims(pred_log,axis=-1)
+				tf.summary.image("pred", pred_log, max_outputs=self.batch_size)
+			else:
+				for batch in range(self.batch_size):
+					if 0 in self.label_classes:
+						pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*math.floor(255/(self.output_channel_num-1)), dtype=tf.uint8)
+					else:
+						pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*math.floor(255/(self.output_channel_num)), dtype=tf.uint8)
+					
+					tf.summary.image("pred", tf.transpose(pred_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
 
 		# accuracy of the model
 		with tf.name_scope("metrics"):
@@ -379,17 +429,27 @@ class image2label(object):
 			tf.summary.scalar('accuracy', accuracy)
 
 			# confusion matrix
-			label_one_hot = tf.one_hot(self.labels_placeholder[:,:,:,:,0],depth=self.output_channel_num)
-			pred_one_hot = tf.one_hot(self.pred_op[:,:,:,:], depth=self.output_channel_num)
+			if self.dimension == 2:
+				label_one_hot = tf.one_hot(self.labels_placeholder[:,:,:,0], depth=self.output_channel_num)
+				pred_one_hot = tf.one_hot(self.pred_op, depth=self.output_channel_num)
+			else:
+				label_one_hot = tf.one_hot(self.labels_placeholder[:,:,:,:,0],depth=self.output_channel_num)
+				pred_one_hot = tf.one_hot(self.pred_op[:,:,:,:], depth=self.output_channel_num)
 
 			for i in range(self.output_channel_num):
 				if i == 0:
 					continue
 				else:
-					tp, tp_op = tf.metrics.true_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_positives_"+str(self.label_classes[i]))
-					tn, tn_op = tf.metrics.true_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_negatives_"+str(self.label_classes[i]))
-					fp, fp_op = tf.metrics.false_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_positives_"+str(self.label_classes[i]))
-					fn, fn_op = tf.metrics.false_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_negatives_"+str(self.label_classes[i]))
+					if self.dimension == 2:
+						tp, tp_op = tf.metrics.true_positives(label_one_hot[:,:,:,i], pred_one_hot[:,:,:,i], name="true_positives_"+str(self.label_classes[i]))
+						tn, tn_op = tf.metrics.true_negatives(label_one_hot[:,:,:,i], pred_one_hot[:,:,:,i], name="true_negatives_"+str(self.label_classes[i]))
+						fp, fp_op = tf.metrics.false_positives(label_one_hot[:,:,:,i], pred_one_hot[:,:,:,i], name="false_positives_"+str(self.label_classes[i]))
+						fn, fn_op = tf.metrics.false_negatives(label_one_hot[:,:,:,i], pred_one_hot[:,:,:,i], name="false_negatives_"+str(self.label_classes[i]))
+					else:
+						tp, tp_op = tf.metrics.true_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_positives_"+str(self.label_classes[i]))
+						tn, tn_op = tf.metrics.true_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_negatives_"+str(self.label_classes[i]))
+						fp, fp_op = tf.metrics.false_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_positives_"+str(self.label_classes[i]))
+						fn, fn_op = tf.metrics.false_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_negatives_"+str(self.label_classes[i]))
 					sensitivity_op = tf.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.add(tp_op,fn_op),tf.float32))
 					specificity_op = tf.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.add(tn_op,fp_op),tf.float32))
 					dice_op = 2.*tp_op/(2.*tp_op+fp_op+fn_op)
@@ -497,7 +557,10 @@ class image2label(object):
 					self.network.is_training = True
 					image, label = self.sess.run(self.next_element_train)
 
-					label = label[:,:,:,:,np.newaxis]
+					if self.dimension == 2:
+						label = label[:,:,:,np.newaxis]
+					else:
+						label = label[:,:,:,:,np.newaxis]
 
 					train, summary, loss = self.sess.run([train_op,summary_op,self.loss_op], feed_dict={
 						self.images_placeholder: image,
@@ -536,7 +599,11 @@ class image2label(object):
 						self.sess.run(tf.local_variables_initializer())
 						self.network.is_training = False
 						image, label = self.sess.run(self.next_element_test)
-						label = label[:,:,:,:,np.newaxis]
+
+						if self.dimension == 2:
+							label = label[:,:,:,np.newaxis]
+						else:
+							label = label[:,:,:,:,np.newaxis]
 
 						summary, loss = self.sess.run([summary_op, self.loss_op],feed_dict={
 							self.images_placeholder: image,

@@ -27,7 +27,6 @@ class NiftiDataset(object):
 		transforms=None,
 		train=False,
 		attention=False,
-		sigma=2,
 		labels=[0,1]):
 
 		# Init membership variables
@@ -36,7 +35,6 @@ class NiftiDataset(object):
 		self.label_filename = label_filename
 		self.transforms = transforms
 		self.train = train
-		self.sigma = sigma
 		self.labels=labels
 
 	def get_dataset(self):
@@ -88,7 +86,7 @@ class NiftiDataset(object):
 		if self.train:
 			label_ = self.read_image(os.path.join(self.data_dir,case, self.label_filename))
 
-			# chekc header same
+			# check header same
 			sameSize = label_.GetSize() == images[0].GetSize()
 			sameSpacing = label_.GetSpacing() == images[0].GetSpacing()
 			sameDirection = label_.GetDirection() == images[0].GetDirection()

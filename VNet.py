@@ -108,7 +108,6 @@ class VNet(object):
             self.activation_fn = prelu
 
     def network_fn(self, x):
-
         keep_prob = self.keep_prob if self.is_training else 1.0
         # if the input has more than 1 channel it has to be expanded because broadcasting only works for 1 input
         # channel
