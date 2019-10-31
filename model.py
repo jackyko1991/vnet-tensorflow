@@ -601,7 +601,7 @@ class image2label(object):
 					train_summary_writer.flush()
 
 					# save checkpoint
-					if self.global_step_op.run()%self.log_interval == 0:
+					if self.global_step_op.eval()%self.log_interval == 0:
 						print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,self.ckpt_dir))
 						if not (os.path.exists(self.ckpt_dir)):
 							os.makedirs(self.ckpt_dir,exist_ok=True)
