@@ -68,7 +68,7 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weighted=False
 
 	if weighted:
 		w = 1/tf.reduce_sum(target*target + smooth, axis=axis)
-		dice = tf.reduce_sum(2.* w * inse +smooth, axis=-1)/tf.reduced_sum(w*(l + r + smooth),axis=-1)
+		dice = tf.reduce_sum(2.* w * inse +smooth, axis=-1)/tf.reduce_sum(w*(l + r + smooth),axis=-1)
 		dice = tf.reduce_mean(dice, name='dice_coe')
 	else:
 		# old axis=[0,1,2,3]
@@ -608,7 +608,7 @@ class image2label(object):
 						saver.save(self.sess, checkpoint_prefix, 
 							global_step=tf.train.global_step(self.sess, self.global_step_op),
 							latest_filename="checkpoint-latest")
-						
+
 				except tf.errors.OutOfRangeError:
 					print("{}: Training of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
 
