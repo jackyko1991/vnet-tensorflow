@@ -22,55 +22,64 @@ def grayscale_to_rainbow(image):
 
 	return RGB
 
-def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), smooth=1e-5):
-    """Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
-    of two batch of data, usually be used for binary image segmentation
-    i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
+def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weighted=False, smooth=1e-5):
+	"""Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
+	of two batch of data, usually be used for binary image segmentation
+	i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
 
-    Parameters
-    -----------
-    output : Tensor
-        A distribution with shape: [batch_size, ....], (any dimensions).
-    target : Tensor
-        The target distribution, format the same with `output`.
-    loss_type : str
-        ``jaccard`` or ``sorensen``, default is ``jaccard``.
-    axis : tuple of int
-        All dimensions are reduced, default ``[1,2,3]``.
-    smooth : float
-        This small value will be added to the numerator and denominator.
-            - If both output and target are empty, it makes sure dice is 1.
-            - If either output or target are empty (all pixels are background), dice = ```smooth/(small_value + smooth)``, then if smooth is very small, dice close to 0 (even the image values lower than the threshold), so in this case, higher smooth can have a higher dice.
+	Parameters
+	-----------
+	output : Tensor
+		A distribution with shape: [batch_size, ....], (any dimensions).
+	target : Tensor
+		The target distribution, format the same with `output`.
+	loss_type : str
+		``jaccard`` or ``sorensen``, default is ``jaccard``.
+	axis : tuple of int
+		All dimensions are reduced, default ``[1,2,3]``.
+	weight : bool
+		Boolean option for generalized dice loss
+	smooth : float
+		This small value will be added to the numerator and denominator.
+			- If both output and target are empty, it makes sure dice is 1.
+			- If either output or target are empty (all pixels are background), dice = ```smooth/(small_value + smooth)``, then if smooth is very small, dice close to 0 (even the image values lower than the threshold), so in this case, higher smooth can have a higher dice.
 
-    Examples
-    ---------
-    >>> import tensorlayer as tl
-    >>> outputs = tl.act.pixel_wise_softmax(outputs)
-    >>> dice_loss = 1 - tl.cost.dice_coe(outputs, y_)
+	Examples
+	---------
+	>>> import tensorlayer as tl
+	>>> outputs = tl.act.pixel_wise_softmax(outputs)
+	>>> dice_loss = 1 - tl.cost.dice_coe(outputs, y_)
 
-    References
-    -----------
-    - `Wiki-Dice <https://en.wikipedia.org/wiki/Sørensen–Dice_coefficient>`__
+	References
+	-----------
+	- `Wiki-Dice <https://en.wikipedia.org/wiki/Sørensen–Dice_coefficient>`__
 
-    """
-    inse = tf.reduce_sum(output * target, axis=axis)
-    if loss_type == 'jaccard':
-        l = tf.reduce_sum(output * output, axis=axis)
-        r = tf.reduce_sum(target * target, axis=axis)
-    elif loss_type == 'sorensen':
-        l = tf.reduce_sum(output, axis=axis)
-        r = tf.reduce_sum(target, axis=axis)
-    else:
-        raise Exception("Unknown loss_type")
-    # old axis=[0,1,2,3]
-    # dice = 2 * (inse) / (l + r)
-    # epsilon = 1e-5
-    # dice = tf.clip_by_value(dice, 0, 1.0-epsilon) # if all empty, dice = 1
-    # new haodong
-    dice = (2. * inse + smooth) / (l + r + smooth)
-    ##
-    dice = tf.reduce_mean(dice, name='dice_coe')
-    return dice
+	"""
+
+	inse = tf.reduce_sum(output * target, axis=axis)
+	if loss_type == 'jaccard':
+		l = tf.reduce_sum(output * output, axis=axis)
+		r = tf.reduce_sum(target * target, axis=axis)
+	elif loss_type == 'sorensen':
+		l = tf.reduce_sum(output, axis=axis)
+		r = tf.reduce_sum(target, axis=axis)
+	else:
+		raise Exception("Unknown loss_type")
+
+	if weighted:
+		w = 1/tf.reduce_sum(target*target + smooth, axis=axis)
+		dice = tf.reduce_sum(2.* w * inse +smooth, axis=-1)/tf.reduced_sum(w*(l + r + smooth),axis=-1)
+		dice = tf.reduce_mean(dice, name='dice_coe')
+	else:
+		# old axis=[0,1,2,3]
+		# dice = 2 * (inse) / (l + r)
+		# epsilon = 1e-5
+		# dice = tf.clip_by_value(dice, 0, 1.0-epsilon) # if all empty, dice = 1
+		# new haodong
+		dice = (2. * inse + smooth) / (l + r + smooth)
+		dice = tf.reduce_mean(dice, name='dice_coe')
+
+	return dice
 
 def prepare_batch(image_ijk_patch_indices_dict):
 	# image_batches = []
@@ -358,28 +367,31 @@ class image2label(object):
 
 		# loss function
 		with tf.name_scope("loss"):
-			"""
-				Tricks for faster converge: Here we provide two calculation methods, first one will ignore  to classical dice formula
-				method 1: exclude the 0-th label in dice calculation. to use this method properly, you must set 0 as the first value in SegmentationClasses in config.json
-				method 2: dice will be average on all classes
-			"""
+			# """
+			# 	Tricks for faster converge: Here we provide two calculation methods, first one will ignore  to classical dice formula
+			# 	method 1: exclude the 0-th label in dice calculation. to use this method properly, you must set 0 as the first value in SegmentationClasses in config.json
+			# 	method 2: dice will be average on all classes
+			# """
 			if self.dimension == 2:
 				labels = tf.one_hot(self.labels_placeholder[:,:,:,0], depth=self.output_channel_num)
 			else:
 				labels = tf.one_hot(self.labels_placeholder[:,:,:,:,0], depth=self.output_channel_num)
 
-			if 0 in self.label_classes:
-				################### method 1 ###################
-				if self.dimension ==2:
-					labels = labels[:,:,:,1:]
-					softmax = self.softmax_op[:,:,:,1:]
-				else:
-					labels = labels[:,:,:,:,1:]
-					softmax = self.softmax_op[:,:,:,:,1:]
-			else:
-				################### method 2 ###################
-				labels = labels
-				softmax = self.softmax_op
+			# if 0 in self.label_classes:
+			# 	################### method 1 ###################
+			# 	if self.dimension ==2:
+			# 		labels = labels[:,:,:,1:]
+			# 		softmax = self.softmax_op[:,:,:,1:]
+			# 	else:
+			# 		labels = labels[:,:,:,:,1:]
+			# 		softmax = self.softmax_op[:,:,:,:,1:]
+			# else:
+			# 	################### method 2 ###################
+			# 	labels = labels
+			# 	softmax = self.softmax_op
+
+			labels = labels
+			softmax = self.softmax_op
 
 			if (self.loss_name == "sorensen"):
 				if self.dimension == 2:
@@ -387,11 +399,23 @@ class image2label(object):
 				else:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen')
 				self.loss_op = 1. - sorensen
+			elif (self.loss_name == "weighted_sorensen"):
+				if self.dimension == 2:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weighted=True)
+				else:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weighted=True)
+				self.loss_op = 1. - sorensen
 			elif (self.loss_name == "jaccard"):
 				if self.dimension == 2:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2))
 				else:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
+				self.loss_op = 1. - jaccard
+			elif (self.loss_name == "weightd_jaccard"):
+				if self.dimension == 2:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weighted=True)
+				else:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weighted=True)
 				self.loss_op = 1. - jaccard
 			else:
 				sys.exit("Invalid loss function")

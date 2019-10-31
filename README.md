@@ -27,6 +27,7 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [x] Evaluation from single data
 - [x] Multichannel input
 - [x] Multiclass output
+- [x] Weighted DICE loss
 - [x] C++ inference (Deprecated)
 
 ## Usage
