@@ -46,7 +46,5 @@ def main():
 			writer.SetFileName(os.path.join(TGT_DIR,case+ "_" +str(k_start),TGT_IMG_NAME))
 			writer.Execute(image_cropped)
 
-		exit()
-
 if __name__=="__main__":
 	main()
