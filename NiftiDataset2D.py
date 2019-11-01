@@ -9,6 +9,32 @@ import multiprocessing
 from tqdm import tqdm
 import NiftiDataset3D
 
+def ExtractSliceFromImage(image_input):
+	# label = image_input['image']
+	# # check if the slice contains label
+	# extractor = sitk.ExtractImageFilter()
+	# size = [label.GetSize()[0],label.GetSize()[1],0]
+	# index = [0,0,i]
+	# extractor.SetSize(size)
+	# extractor.SetIndex(index)
+	# label_ = extractor.Execute(label)
+
+	# binaryThresholdFilter = sitk.BinaryThresholdImageFilter()
+	# binaryThresholdFilter.SetLowerThreshold(1)
+	# binaryThresholdFilter.SetUpperThreshold(255)
+	# binaryThresholdFilter.SetInsideValue(1)
+	# binaryThresholdFilter.SetOutsideValue(0)
+	# label_ = binaryThresholdFilter.Execute(label_)
+
+	# statFilter = sitk.StatisticsImageFilter()
+	# statFilter.Execute(label_)
+
+	# if statFilter.GetSum() > 1:
+	# 	slices_list.append([case,i])
+
+	return
+
+
 class NiftiDataset(object):
 	"""
 	load image-label pair for training, testing and inference.
@@ -29,7 +55,9 @@ class NiftiDataset(object):
 		transforms3D=None,
 		transforms2D=None,
 		train=False,
-		labels=[0,1]):
+		labels=[0,1],
+		min_pixel=5,
+		drop_ratio=0.1):
 
 		# Init membership variables
 		self.data_dir = data_dir
@@ -38,7 +66,9 @@ class NiftiDataset(object):
 		self.transforms3D = transforms3D
 		self.transforms2D = transforms2D
 		self.train = train
-		self.labels=labels
+		self.labels = labels
+		self.min_pixel = min_pixel
+		self.drop_ratio = drop_ratio
 
 	def read_image(self,path):
 		reader = sitk.ImageFileReader()
@@ -55,6 +85,7 @@ class NiftiDataset(object):
 			pbar.set_description("Loading {}...".format(case))
 
 			label = self.read_image(os.path.join(self.data_dir,case,self.label_filename))
+
 			for i in range(label.GetSize()[2]):
 				# check if the slice contains label
 				extractor = sitk.ExtractImageFilter()
@@ -94,11 +125,172 @@ class NiftiDataset(object):
 			self.input_parser, [case, slice_num], [tf.float32,tf.int32])),
 			num_parallel_calls=multiprocessing.cpu_count())
 
+		# case_list = os.listdir(self.data_dir)
+
+		# dataset = tf.data.Dataset.from_tensor_slices(case_list)
+		# dataset = dataset.map(lambda case: tuple(tf.py_func(
+		# 	self.input_parser, [case], [tf.float32,tf.int32])),
+		# 	num_parallel_calls=multiprocessing.cpu_count())
+
 		self.dataset = dataset
-		self.data_size = len(slices_list)
+		self.data_size = len(case_list)
 		return self.dataset
 
-	def input_parser(self, case, slice_num):
+	# def drop(self,probability):
+	# 	return random.random() <= probability
+
+	# def input_parser(self, case):
+	# 	# read image and select the desire slice
+	# 	case = case.decode("utf-8")
+
+	# 	image_paths = []
+	# 	for channel in range(len(self.image_filenames)):
+	# 		image_paths.append(os.path.join(self.data_dir,case,self.image_filenames[channel]))
+
+	# 	# read images
+	# 	images = []
+	# 	for channel in range(len(image_paths)):
+	# 		images.append(self.read_image(image_paths[channel]))
+
+	# 	# cast image
+	# 	castImageFilter = sitk.CastImageFilter()
+	# 	castImageFilter.SetOutputPixelType(sitk.sitkFloat32)
+	# 	for channel in range(len(images)):
+	# 		images[channel] = castImageFilter.Execute(images[channel])
+	# 		# check header consistency
+	# 		sameSize = images[channel].GetSize() == images[0].GetSize()
+	# 		sameSpacing = images[channel].GetSpacing() == images[0].GetSpacing()
+	# 		sameDirection = images[channel].GetDirection() == images[0].GetDirection()
+
+	# 		if sameSize and sameSpacing and sameDirection:
+	# 			continue
+	# 		else:
+	# 			raise Exception('Header info inconsistent: {}'.format(source_paths[channel]))
+	# 			exit()
+
+	# 	label = sitk.Image(images[0].GetSize(), sitk.sitkUInt8)
+	# 	label.SetOrigin(images[0].GetOrigin())
+	# 	label.SetSpacing(images[0].GetSpacing())
+	# 	label.SetDirection(images[0].GetDirection())
+
+	# 	if self.train:
+	# 		label_ = self.read_image(os.path.join(self.data_dir, case, self.label_filename))
+
+	# 		# check header consistency
+	# 		sameSize = label_.GetSize() == images[0].GetSize()
+	# 		sameSpacing = label_.GetSpacing() == images[0].GetSpacing()
+	# 		sameDirection = label_.GetDirection() == images[0].GetDirection()
+	# 		if not (sameSize and sameSpacing and sameDirection):
+	# 			raise Exception('Header info inconsistent: {}'.format(os.path.join(self.data_dir,case, self.label_filename)))
+	# 			exit()
+
+	# 		thresholdFilter = sitk.BinaryThresholdImageFilter()
+	# 		thresholdFilter.SetOutsideValue(0)
+	# 		thresholdFilter.SetInsideValue(1)
+
+	# 		castImageFilter = sitk.CastImageFilter()
+	# 		castImageFilter.SetOutputPixelType(sitk.sitkUInt8)
+	# 		for channel in range(len(self.labels)):
+	# 			thresholdFilter.SetLowerThreshold(self.labels[channel])
+	# 			thresholdFilter.SetUpperThreshold(self.labels[channel])
+	# 			one_hot_label_image = thresholdFilter.Execute(label_)
+	# 			multiFilter = sitk.MultiplyImageFilter()
+	# 			one_hot_label_image = multiFilter.Execute(one_hot_label_image, channel)
+	# 			# cast one_hot_label to sitkUInt8
+	# 			one_hot_label_image = castImageFilter.Execute(one_hot_label_image)
+	# 			one_hot_label_image.SetSpacing(images[0].GetSpacing())
+	# 			one_hot_label_image.SetDirection(images[0].GetDirection())
+	# 			one_hot_label_image.SetOrigin(images[0].GetOrigin())
+	# 			addFilter = sitk.AddImageFilter()
+	# 			label = addFilter.Execute(label,one_hot_label_image)
+
+	# 	sample = {'image':images, 'label':label}
+
+	# 	if self.transforms3D:
+	# 		for transform in self.transforms3D:
+	# 			try:
+	# 				sample =transform(sample)
+	# 			except:
+	# 				print("Dataset preprocessing error: {}".format(os.path.dirname(image_paths[0])))
+	# 				exit()
+
+	# 	# extract the desire slice
+	# 	images = sample['image']
+	# 	label = sample['label']
+
+	# 	# check if the slice contains label
+	# 	contain_label = False
+
+	# 	extractor = sitk.ExtractImageFilter()
+	# 	size = [label.GetSize()[0],label.GetSize()[1],0]
+	# 	extractor.SetSize(size)
+		
+	# 	binaryThresholdFilter = sitk.BinaryThresholdImageFilter()
+	# 	binaryThresholdFilter.SetLowerThreshold(1)
+	# 	binaryThresholdFilter.SetUpperThreshold(255)
+	# 	binaryThresholdFilter.SetInsideValue(1)
+	# 	binaryThresholdFilter.SetOutsideValue(0)
+	# 	label_ = binaryThresholdFilter.Execute(label)
+
+	# 	labelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
+	# 	labelShapeFilter.Execute(label_)
+	# 	bbox = labelShapeFilter.GetBoundingBox(1)
+
+	# 	statFilter = sitk.StatisticsImageFilter()
+	# 	statFilter.Execute(label_)
+	# 	if statFilter.GetSum() < self.min_pixel:
+	# 		contain_label = True
+	# 		slice_num = np.random.randint(0,label.GetSize()[2])
+	# 		index = [0,0,slice_num]
+	# 		extractor.SetIndex(index)
+
+	# 	while not contain_label: 
+	# 		slice_num = np.random.randint(bbox[2],bbox[2]+bbox[5])
+	# 		index = [0,0,slice_num]
+	# 		extractor.SetIndex(index)
+	# 		label_ = extractor.Execute(label)
+	# 		label_ = binaryThresholdFilter.Execute(label_)
+		
+	# 		statFilter.Execute(label_)
+
+	# 		# will iterate until a sub volume containing label is extracted
+	# 		# pixel_count = seg_crop.GetHeight()*seg_crop.GetWidth()*seg_crop.GetDepth()
+	# 		# if statFilter.GetSum()/pixel_count<self.min_ratio:
+	# 		if statFilter.GetSum()<self.min_pixel:
+	# 			contain_label = self.drop(self.drop_ratio) # has some probabilty to contain patch with empty label
+	# 		else:
+	# 			contain_label = True
+
+	# 	for channel in range(len(images)):
+	# 		images[channel] = extractor.Execute(images[channel])
+
+	# 	label = extractor.Execute(label)
+
+	# 	sample = {'image':images, 'label':label}
+
+	# 	if self.transforms2D:
+	# 		for transform in self.transforms2D:
+	# 			try:
+	# 				sample = transform(sample)
+	# 			except:
+	# 				print("Dataset preprocessing error: {}".format(os.path.dirname(image_paths[0])))
+	# 				exit()
+
+	# 	# convert sample to tf tensors
+	# 	for channel in range(len(sample['image'])):
+	# 		image_np_ = sitk.GetArrayFromImage(sample['image'][channel])
+	# 		image_np_ = np.asarray(image_np_,np.float32)
+	# 		if channel == 0:
+	# 			image_np = image_np_[:,:,np.newaxis]
+	# 		else:
+	# 			image_np = np.append(image_np,image_np_[:,:,np.newaxis],axis=-1)
+
+	# 	label_np = sitk.GetArrayFromImage(sample['label'])
+	# 	label_np = np.asarray(label_np,np.int32)
+
+	# 	return image_np, label_np
+
+def input_parser(self, case, slice_num):
 		# read image and select the desire slice
 		case = case.decode("utf-8")
 

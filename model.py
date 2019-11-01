@@ -285,8 +285,8 @@ class image2label(object):
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -302,8 +302,8 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -328,7 +328,16 @@ class image2label(object):
 		if self.network_name == "FCN":
 			sys.exit("Network to be developed")
 		elif self.network_name == "UNet":
-			sys.exit("Network to be developed")
+			self.network = networks.UNet(
+				num_output_channels=self.output_channel_num,
+				dropout_rate=0.01,
+				num_channels=4,
+				num_levels=4,
+				num_convolutions=2,
+				bottom_convolutions=2,
+				is_training=True,
+				activation_fn="relu"
+				)
 		elif self.network_name =="VNet":
 			self.network = networks.VNet(
 				num_classes=self.output_channel_num,
