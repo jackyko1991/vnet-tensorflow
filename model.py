@@ -285,8 +285,8 @@ class image2label(object):
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -302,8 +302,8 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -672,6 +672,11 @@ class image2label(object):
 			test_summary_writer.close()
 
 	def evaluate_single_3D(self, sample, transforms):
+		input_origin = sample['image'][0].GetOrigin()
+		input_direction = sample['image'][0].GetDirection()
+		input_spacing = sample['image'][0].GetSpacing()
+		input_size = sample['image'][0].GetSize()
+
 		for transform in transforms:
 			sample = transform(sample)
 
@@ -807,13 +812,17 @@ class image2label(object):
 		# resample the label back to original space
 		resampler = sitk.ResampleImageFilter()
 		resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-		resampler.SetOutputSpacing(images[0].GetSpacing())
-		resampler.SetSize(images[0].GetSize())
-		resampler.SetOutputOrigin(images[0].GetOrigin())
-		resampler.SetOutputDirection(images[0].GetDirection())
+		resampler.SetOutputSpacing(input_spacing)
+		resampler.SetSize(input_size)
+		resampler.SetOutputOrigin(input_origin)
+		resampler.SetOutputDirection(input_direction)
 
 		print("{}: Resampling label back to original image space...".format(datetime.datetime.now()))
 		label = resampler.Execute(label_tfm)
+
+		if not self.evaluate_probability_output:
+			return label
+
 		if self.evaluate_probability_output:
 			resampler.SetInterpolator(sitk.sitkLinear)
 			print("{}: Resampling probability map back to original image space...".format(datetime.datetime.now()))
@@ -822,6 +831,11 @@ class image2label(object):
 		return label, prob
 
 	def evaluate_single_2D(self,sample, transforms):
+		input_origin = sample['image'][0].GetOrigin()
+		input_direction = sample['image'][0].GetDirection()
+		input_spacing = sample['image'][0].GetSpacing()
+		input_size = sample['image'][0].GetSize()
+
 		for transform in transforms['3D']:
 			sample = transform(sample)
 
@@ -836,8 +850,8 @@ class image2label(object):
 			prob.SetSpacing(images[0].GetSpacing())
 
 		# loop over slices
-		for layer in range(images[0].GetSize()[2]):
-			print(str(layer),"/",str(images[0].GetSize()[2]))
+		for layer in tqdm(range(images[0].GetSize()[2])):
+			# print(str(layer),"/",str(images[0].GetSize()[2]))
 			extractor = sitk.ExtractImageFilter()
 			size = [images[0].GetSize()[0],images[0].GetSize()[1],0]
 			index = [0,0,layer]
@@ -851,6 +865,11 @@ class image2label(object):
 			label_slice = extractor.Execute(label)
 
 			sample = {'image':images_slice, 'label':label_slice}
+
+			input_slice_spacing = label_slice.GetSpacing()
+			input_slice_direction = label_slice.GetDirection()
+			input_slice_size = label_slice.GetSize()
+			input_slice_origin = label_slice.GetOrigin()
 
 			for transform in transforms['2D']:
 				sample = transform(sample)
@@ -870,7 +889,7 @@ class image2label(object):
 			label_np = np.asarray(label_np, np.int32)
 
 			if self.evaluate_probability_output:
-				softmax_np = sitk.GetArrayFromImage(extractor.Execute(prob))
+				softmax_np = np.zeros(label_np.shape)
 				softmax_np = np.asarray(softmax_np,np.float32)
 
 			# a weighting matrix will be used for averaging the overlapped region
@@ -918,9 +937,19 @@ class image2label(object):
 
 			# convert label numpy back to sitk image
 			label_slice = sitk.GetImageFromArray(label_np)
-			# label_tfm.SetOrigin(images[0].GetOrigin())
-			# label_tfm.SetDirection(images[0].GetDirection())
-			# label_tfm.SetSpacing(images[0].GetSpacing())
+			label_slice.SetOrigin(images_slice[0].GetOrigin())
+			label_slice.SetDirection(images_slice[0].GetDirection())
+			label_slice.SetSpacing(images_slice[0].GetSpacing())
+
+			# resample the label back to original space
+			resampler = sitk.ResampleImageFilter()
+			resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+			resampler.SetOutputSpacing(input_slice_spacing)
+			resampler.SetSize(input_slice_size)
+			resampler.SetOutputOrigin(input_slice_origin)
+			resampler.SetOutputDirection(input_slice_direction)
+			label_slice = resampler.Execute(label_slice)
+
 			label_slice = sitk.JoinSeries(label_slice)
 			castFilter = sitk.CastImageFilter()
 			castFilter.SetOutputPixelType(sitk.sitkUInt8)
@@ -929,26 +958,19 @@ class image2label(object):
 
 			if self.evaluate_probability_output:
 				prob_slice = sitk.GetImageFromArray(softmax_np)
-				# softmax_tfm.SetOrigin(images[0].GetOrigin())
-				# softmax_tfm.SetDirection(images[0].GetDirection())
-				# softmax_tfm.SetSpacing(images[0].GetSpacing())
+				prob_slice.SetOrigin(images_slice[0].GetOrigin())
+				prob_slice.SetDirection(images_slice[0].GetDirection())
+				prob_slice.SetSpacing(images_slice[0].GetSpacing())
+
+				# resample the label back to original space
+				resampler.SetInterpolator(sitk.sitkLinear)
+				prob_slice = resampler.Execute(prob_slice)
+
 				prob_slice = sitk.JoinSeries(prob_slice)
 				prob = sitk.Paste(prob, prob_slice, prob_slice.GetSize(), destinationIndex=[0,0,layer])
 
-			prob = label
-
-		# # resample the label back to original space
-		# resampler = sitk.ResampleImageFilter()
-		# resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-		# resampler.SetOutputSpacing(images[0].GetSpacing())
-		# resampler.SetSize(images[0].GetSize())
-		# resampler.SetOutputOrigin(images[0].GetOrigin())
-		# resampler.SetOutputDirection(images[0].GetDirection())
-
-		# print("{}: Resampling label back to original image space...".format(datetime.datetime.now()))
-		# label = resampler.Execute(label_tfm)
-		# if self.evaluate_probability_output:
-		# 	prob = resampler.Execute(softmax_tfm)
+		if not self.evaluate_probability_output:
+			return label
 
 		return label, prob
 
@@ -1021,10 +1043,16 @@ class image2label(object):
 
 			sample = {'image':images_tfm, 'label': label_tfm}
 
-			if self.dimension == 2:
-				label, prob = self.evaluate_single_2D(sample,transforms)
+			if self.evaluate_probability_output:
+				if self.dimension == 2:
+					label, prob = self.evaluate_single_2D(sample,transforms)
+				else:
+					label, prob = self.evaluate_single_3D(sample,transforms)
 			else:
-				label, prob = self.evaluate_single_3D(sample,transforms)
+				if self.dimension == 2:
+					label = self.evaluate_single_2D(sample,transforms)
+				else:
+					label = self.evaluate_single_3D(sample,transforms)
 
 			# save segmented label
 			writer = sitk.ImageFileWriter()
