@@ -290,7 +290,7 @@ class NiftiDataset(object):
 
 	# 	return image_np, label_np
 
-def input_parser(self, case, slice_num):
+	def input_parser(self, case, slice_num):
 		# read image and select the desire slice
 		case = case.decode("utf-8")
 
