@@ -133,7 +133,7 @@ class NiftiDataset(object):
 		# 	num_parallel_calls=multiprocessing.cpu_count())
 
 		self.dataset = dataset
-		self.data_size = len(case_list)
+		self.data_size = len(slices_list)
 		return self.dataset
 
 	# def drop(self,probability):
