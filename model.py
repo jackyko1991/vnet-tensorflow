@@ -67,7 +67,7 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weighted=False
 		raise Exception("Unknown loss_type")
 
 	if weighted:
-		w = 1/tf.reduce_sum(target*target + smooth, axis=axis)
+		w = 1/(tf.reduce_sum(target*target, axis=axis) + smooth)
 		dice = tf.reduce_sum(2.* w * inse +smooth, axis=-1)/tf.reduce_sum(w*(l + r + smooth),axis=-1)
 		dice = tf.reduce_mean(dice, name='dice_coe')
 	else:
