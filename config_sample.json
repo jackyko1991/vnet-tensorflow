@@ -19,7 +19,9 @@
         "PatchShape": [256,256],
         "ImageLog": false,
         "Testing": true,
+        "TestStep": 30,
         "Epoches": 99999,
+        "MaxIterations": 15000,
         "LogInterval": 50,
         "Networks": {
             "Name":"VNet",

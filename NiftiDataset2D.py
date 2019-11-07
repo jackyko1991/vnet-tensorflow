@@ -293,6 +293,7 @@ class NiftiDataset(object):
 	def input_parser(self, case, slice_num):
 		# read image and select the desire slice
 		case = case.decode("utf-8")
+		slice_num = int(slice_num)
 
 		image_paths = []
 		for channel in range(len(self.image_filenames)):

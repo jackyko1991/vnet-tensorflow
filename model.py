@@ -136,11 +136,13 @@ class image2label(object):
 		self.dimension = len(self.config['TrainingSetting']['PatchShape'])
 		self.image_log = self.config['TrainingSetting']['ImageLog']
 		self.testing = self.config['TrainingSetting']['Testing']
+		self.test_stop = self.config['TrainingSetting']['TestStep']
 
 		self.restore_training = self.config['TrainingSetting']['Restore']
 		self.log_dir = self.config['TrainingSetting']['LogDir']
 		self.ckpt_dir = self.config['TrainingSetting']['CheckpointDir']
 		self.epoches = self.config['TrainingSetting']['Epoches']
+		self.max_itr = self.config['TrainingSetting']['MaxIterations']
 		self.log_interval = self.config['TrainingSetting']['LogInterval']
 
 		self.network_name = self.config['TrainingSetting']['Networks']['Name']
@@ -211,7 +213,7 @@ class image2label(object):
 		
 		dataset = Dataset.get_dataset()
 		if self.dimension == 2:
-			dataset = dataset.shuffle(buffer_size=50)
+			dataset = dataset.shuffle(buffer_size=10)
 		else:
 			dataset = dataset.shuffle(buffer_size=3)
 		dataset = dataset.batch(self.batch_size,drop_remainder=True)
@@ -581,15 +583,23 @@ class image2label(object):
 			self.sess.run(self.train_iterator.initializer)
 			if self.testing:
 				self.sess.run(self.test_iterator.initializer)
+			# print("{}: Dataset iterator initialize ok".format(datetime.datetime.now()))
 
 			# training phase
 			loss_sum = 0
 			count = 0
 			while True:
+				if self.global_step_op.eval() > self.max_itr:
+					sys.exit("{}: Reach maximum iteration steps, training abort.".format(datetime.datetime.now()))
 				try:
 					self.sess.run(tf.local_variables_initializer())
+
+					# print("{}: Local variable initialize ok".format(datetime.datetime.now()))
 					self.network.is_training = True
+					# print("{}: Set network to training ok".format(datetime.datetime.now()))
 					image, label = self.sess.run(self.next_element_train)
+
+					# print("{}: Get next element train ok".format(datetime.datetime.now()))
 
 					if self.dimension == 2:
 						label = label[:,:,:,np.newaxis]
