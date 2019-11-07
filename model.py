@@ -136,7 +136,7 @@ class image2label(object):
 		self.dimension = len(self.config['TrainingSetting']['PatchShape'])
 		self.image_log = self.config['TrainingSetting']['ImageLog']
 		self.testing = self.config['TrainingSetting']['Testing']
-		self.test_stop = self.config['TrainingSetting']['TestStep']
+		self.test_step = self.config['TrainingSetting']['TestStep']
 
 		self.restore_training = self.config['TrainingSetting']['Restore']
 		self.log_dir = self.config['TrainingSetting']['LogDir']
@@ -213,7 +213,7 @@ class image2label(object):
 		
 		dataset = Dataset.get_dataset()
 		if self.dimension == 2:
-			dataset = dataset.shuffle(buffer_size=10)
+			dataset = dataset.shuffle(buffer_size=5)
 		else:
 			dataset = dataset.shuffle(buffer_size=3)
 		dataset = dataset.batch(self.batch_size,drop_remainder=True)
@@ -576,13 +576,16 @@ class image2label(object):
 		if self.testing:
 			test_summary_writer = tf.summary.FileWriter(self.log_dir + '/test', self.sess.graph)
 
+		# testing initializer need to execute outside training loop
+		if self.testing:
+			self.sess.run(self.test_iterator.initializer)
+
 		# loop over epochs
 		for epoch in np.arange(start_epoch.eval(session=self.sess), self.epoches):
 			print("{}: Epoch {} starts...".format(datetime.datetime.now(),epoch+1))
 			# initialize iterator in each new epoch
 			self.sess.run(self.train_iterator.initializer)
-			if self.testing:
-				self.sess.run(self.test_iterator.initializer)
+			
 			# print("{}: Dataset iterator initialize ok".format(datetime.datetime.now()))
 
 			# training phase
@@ -611,7 +614,7 @@ class image2label(object):
 						self.labels_placeholder: label,
 						self.network.train_phase: True
 						})
-					print('{}: Segmentation loss: {}'.format(datetime.datetime.now(), str(loss)))
+					print('{}: Segmentation training loss: {}'.format(datetime.datetime.now(), str(loss)))
 
 					loss_sum += loss
 					count += 1
@@ -628,6 +631,31 @@ class image2label(object):
 							global_step=tf.train.global_step(self.sess, self.global_step_op),
 							latest_filename="checkpoint-latest")
 
+					# testing phase
+					if self.testing and (self.global_step_op.eval()%self.test_step == 0):
+						self.sess.run(tf.local_variables_initializer())
+						self.network.is_training = False
+						try:
+							image, label = self.sess.run(self.next_element_test)
+						except tf.errors.OutOfRangeError:
+							image, label = self.sess.run(self.next_element_test)
+								
+						if self.dimension == 2:
+							label = label[:,:,:,np.newaxis]
+						else:
+							label = label[:,:,:,:,np.newaxis]
+
+						summary, loss = self.sess.run([summary_op, self.loss_op],feed_dict={
+							self.images_placeholder: image,
+							self.labels_placeholder: label,
+							self.network.train_phase: False
+						})
+
+						print('{}: Segmentation testing loss: {}'.format(datetime.datetime.now(), str(loss)))
+
+						test_summary_writer.add_summary(summary, global_step=tf.train.global_step(self.sess, self.global_step_op))
+						test_summary_writer.flush()
+
 				except tf.errors.OutOfRangeError:
 					print("{}: Training of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
 
@@ -643,39 +671,7 @@ class image2label(object):
 						latest_filename="checkpoint-latest")
 					print("{}: Saving checkpoint succeed".format(datetime.datetime.now()))
 					break
-
-			# testing phase
-			if self.testing:
-				loss_sum = 0
-				count = 0
-				while True:
-					try:
-						self.sess.run(tf.local_variables_initializer())
-						self.network.is_training = False
-						image, label = self.sess.run(self.next_element_test)
-
-						if self.dimension == 2:
-							label = label[:,:,:,np.newaxis]
-						else:
-							label = label[:,:,:,:,np.newaxis]
-
-						summary, loss = self.sess.run([summary_op, self.loss_op],feed_dict={
-							self.images_placeholder: image,
-							self.labels_placeholder: label,
-							self.network.train_phase: False
-						})
-
-						print('{}: Segmentation loss: {}'.format(datetime.datetime.now(), str(loss)))
-
-						loss_sum += loss
-						count += 1
-
-						test_summary_writer.add_summary(summary, global_step=tf.train.global_step(self.sess, self.global_step_op))
-						test_summary_writer.flush()
-					except tf.errors.OutOfRangeError:
-						print("{}: Testing of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
-						break
-
+				
 		# close tensorboard summary writer
 		train_summary_writer.close()
 		if self.testing:
