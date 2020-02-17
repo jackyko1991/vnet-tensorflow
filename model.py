@@ -638,6 +638,7 @@ class image2label(object):
 						try:
 							image, label = self.sess.run(self.next_element_test)
 						except tf.errors.OutOfRangeError:
+							self.sess.run(self.test_iterator.initializer)
 							image, label = self.sess.run(self.next_element_test)
 								
 						if self.dimension == 2:
