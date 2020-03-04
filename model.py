@@ -246,12 +246,12 @@ class image2label(object):
 					labels_log = tf.cast(self.labels_placeholder*math.floor(255/(self.output_channel_num-1)), dtype=tf.uint8)
 				else:
 					labels_log = tf.cast(self.labels_placeholder*math.floor(255/self.output_channel_num), dtype=tf.uint8)
-				tf.summary.image("label"+"_batch"+str(batch),labels_log, max_outputs=self.batch_size)
+				tf.summary.image("label",labels_log, max_outputs=self.batch_size)
 			else:
 				for batch in range(self.batch_size):
 					for image_channel in range(self.input_channel_num):
 						image_log = tf.cast(self.images_placeholder[batch:batch+1,:,:,:,image_channel], dtype=tf.uint8)
-						tf.summary.image(self.image_filenames[image_channel], tf.transpose(image_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
+						tf.summary.image(self.image_filenames[image_channel]+"_batch"+str(batch), tf.transpose(image_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
 					if 0 in self.label_classes:
 						labels_log = tf.cast(self.labels_placeholder[batch:batch+1,:,:,:,0]*math.floor(255/(self.output_channel_num-1)),dtype=tf.uint8)
 					else:
