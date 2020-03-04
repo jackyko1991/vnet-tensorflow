@@ -8,6 +8,7 @@ import random
 import multiprocessing
 from tqdm import tqdm
 import NiftiDataset3D
+import threading
 
 def ExtractSliceFromImage(image_input):
 	# label = image_input['image']
@@ -123,7 +124,8 @@ class NiftiDataset(object):
 		dataset = tf.data.Dataset.from_tensor_slices((slices_list_1,slices_list_2))
 		dataset = dataset.map(lambda case, slice_num: tuple(tf.py_func(
 			self.input_parser, [case, slice_num], [tf.float32,tf.int32])),
-			num_parallel_calls=multiprocessing.cpu_count())
+			num_parallel_calls=1)
+			# num_parallel_calls=multiprocessing.cpu_count())
 
 		# case_list = os.listdir(self.data_dir)
 
@@ -305,9 +307,9 @@ class NiftiDataset(object):
 			images.append(self.read_image(image_paths[channel]))
 
 		# cast image
-		castImageFilter = sitk.CastImageFilter()
-		castImageFilter.SetOutputPixelType(sitk.sitkFloat32)
 		for channel in range(len(images)):
+			castImageFilter = sitk.CastImageFilter()
+			castImageFilter.SetOutputPixelType(sitk.sitkFloat32)
 			images[channel] = castImageFilter.Execute(images[channel])
 			# check header consistency
 			sameSize = images[channel].GetSize() == images[0].GetSize()
@@ -320,7 +322,7 @@ class NiftiDataset(object):
 				raise Exception('Header info inconsistent: {}'.format(source_paths[channel]))
 				exit()
 
-		label = sitk.Image(images[0].GetSize(), sitk.sitkUInt8)
+		label = sitk.Image(images[0].GetSize(), sitk.sitkInt32)
 		label.SetOrigin(images[0].GetOrigin())
 		label.SetSpacing(images[0].GetSpacing())
 		label.SetDirection(images[0].GetDirection())
@@ -336,19 +338,18 @@ class NiftiDataset(object):
 				raise Exception('Header info inconsistent: {}'.format(os.path.join(self.data_dir,case, self.label_filename)))
 				exit()
 
-			thresholdFilter = sitk.BinaryThresholdImageFilter()
-			thresholdFilter.SetOutsideValue(0)
-			thresholdFilter.SetInsideValue(1)
-
-			castImageFilter = sitk.CastImageFilter()
-			castImageFilter.SetOutputPixelType(sitk.sitkUInt8)
 			for channel in range(len(self.labels)):
+				thresholdFilter = sitk.BinaryThresholdImageFilter()
+				thresholdFilter.SetOutsideValue(0)
+				thresholdFilter.SetInsideValue(1)
 				thresholdFilter.SetLowerThreshold(self.labels[channel])
 				thresholdFilter.SetUpperThreshold(self.labels[channel])
 				one_hot_label_image = thresholdFilter.Execute(label_)
 				multiFilter = sitk.MultiplyImageFilter()
 				one_hot_label_image = multiFilter.Execute(one_hot_label_image, channel)
-				# cast one_hot_label to sitkUInt8
+				# cast one_hot_label to sitkInt32
+				castImageFilter = sitk.CastImageFilter()
+				castImageFilter.SetOutputPixelType(sitk.sitkInt32)
 				one_hot_label_image = castImageFilter.Execute(one_hot_label_image)
 				one_hot_label_image.SetSpacing(images[0].GetSpacing())
 				one_hot_label_image.SetDirection(images[0].GetDirection())
@@ -361,7 +362,9 @@ class NiftiDataset(object):
 		if self.transforms3D:
 			for transform in self.transforms3D:
 				try:
+					# print(case, transform.name)
 					sample =transform(sample)
+					# print(case, transform.name,"3d transform complete")
 				except:
 					print("Dataset preprocessing error: {}".format(os.path.dirname(image_paths[0])))
 					exit()
@@ -370,14 +373,17 @@ class NiftiDataset(object):
 		images = sample['image']
 		label = sample['label']
 
-		extractor = sitk.ExtractImageFilter()
 		size = [images[0].GetSize()[0],images[0].GetSize()[1],0]
 		index = [0,0,int(slice_num)]
-		extractor.SetSize(size)
-		extractor.SetIndex(index)
 		for channel in range(len(images)):
+			extractor = sitk.ExtractImageFilter()
+			extractor.SetSize(size)
+			extractor.SetIndex(index)
 			images[channel] = extractor.Execute(images[channel])
 
+		extractor = sitk.ExtractImageFilter()
+		extractor.SetSize(size)
+		extractor.SetIndex(index)
 		label = extractor.Execute(label)
 
 		sample = {'image':images, 'label':label}
@@ -385,7 +391,9 @@ class NiftiDataset(object):
 		if self.transforms2D:
 			for transform in self.transforms2D:
 				try:
+					# print(case, transform.name)
 					sample = transform(sample)
+					# print(case, transform.name,"2d transform complete")
 				except:
 					print("Dataset preprocessing error: {}".format(os.path.dirname(image_paths[0])))
 					exit()
@@ -401,6 +409,8 @@ class NiftiDataset(object):
 
 		label_np = sitk.GetArrayFromImage(sample['label'])
 		label_np = np.asarray(label_np,np.int32)
+
+		# print(case, "convert sitk image to np array complete")
 
 		return image_np, label_np
 
@@ -418,13 +428,13 @@ class ManualNormalization(object):
 
 	def __call__(self, sample):
 		image, label = sample['image'], sample['label']
-		intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
-		intensityWindowingFilter.SetOutputMaximum(255)
-		intensityWindowingFilter.SetOutputMinimum(0)
-		intensityWindowingFilter.SetWindowMaximum(self.windowMax);
-		intensityWindowingFilter.SetWindowMinimum(self.windowMin);
-
+		
 		for channel in range(len(image)):
+			intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
+			intensityWindowingFilter.SetOutputMaximum(255)
+			intensityWindowingFilter.SetOutputMinimum(0)
+			intensityWindowingFilter.SetWindowMaximum(self.windowMax);
+			intensityWindowingFilter.SetWindowMinimum(self.windowMin);
 			image[channel] = intensityWindowingFilter.Execute(image[channel])
 
 		return {'image': image, 'label': label}
@@ -476,6 +486,10 @@ class Resample(object):
 			image[image_channel] = resampler.Execute(image[image_channel])
 
 		# resample on segmentation
+		resampler = sitk.ResampleImageFilter()
+		resampler.SetInterpolator(sitk.sitkLinear)
+		resampler.SetOutputSpacing(new_spacing)
+		resampler.SetSize(new_size)
 		resampler.SetInterpolator(sitk.sitkNearestNeighbor)
 		resampler.SetOutputOrigin(label.GetOrigin())
 		resampler.SetOutputDirection(label.GetDirection())
@@ -532,6 +546,9 @@ class Padding(object):
 				image[image_channel] = resampler.Execute(image[image_channel])
 
 			# resample on label
+			resampler = sitk.ResampleImageFilter()
+			resampler.SetOutputSpacing(image[image_channel].GetSpacing())
+			resampler.SetSize(output_size)
 			resampler.SetInterpolator(sitk.sitkNearestNeighbor)
 			resampler.SetOutputOrigin(label.GetOrigin())
 			resampler.SetOutputDirection(label.GetDirection())
