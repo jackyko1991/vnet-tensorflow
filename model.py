@@ -251,12 +251,12 @@ class image2label(object):
 				for batch in range(self.batch_size):
 					for image_channel in range(self.input_channel_num):
 						image_log = tf.cast(self.images_placeholder[batch:batch+1,:,:,:,image_channel], dtype=tf.uint8)
-						tf.summary.image(self.image_filenames[image_channel], tf.transpose(image_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
+						tf.summary.image(self.image_filenames[image_channel]+"_batch"+str(batch), tf.transpose(image_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
 					if 0 in self.label_classes:
 						labels_log = tf.cast(self.labels_placeholder[batch:batch+1,:,:,:,0]*math.floor(255/(self.output_channel_num-1)),dtype=tf.uint8)
 					else:
 						labels_log = tf.cast(self.labels_placeholder[batch:batch+1,:,:,:,0]*math.floor(255/self.output_channel_num), dtype=tf.uint8)
-					tf.summary.image("label", tf.transpose(labels_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
+					tf.summary.image("label"+"_batch"+str(batch), tf.transpose(labels_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
 
 		# Get images and labels
 		# create transformations to image and labels
@@ -373,7 +373,7 @@ class image2label(object):
 					for output_channel in range(self.output_channel_num):
 						softmax_log = grayscale_to_rainbow(tf.transpose(self.softmax_op[batch:batch+1,:,:,:,output_channel],[3,1,2,0]))
 						softmax_log = tf.cast(softmax_log*255,dtype=tf.uint8)
-						tf.summary.image("softmax_" + str(self.label_classes[output_channel]),softmax_log,max_outputs=self.patch_shape[-1])
+						tf.summary.image("softmax_" + str(self.label_classes[output_channel])+"_batch"+str(batch),softmax_log,max_outputs=self.patch_shape[-1])
 
 		print("{}: Output layers complete".format(datetime.datetime.now()))
 
@@ -405,7 +405,9 @@ class image2label(object):
 			labels = labels
 			softmax = self.softmax_op
 
-			if (self.loss_name == "sorensen"):
+			if (self.loss_name == "xent"):
+				self.loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+			elif (self.loss_name == "sorensen"):
 				if self.dimension == 2:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen',axis=(1,2))
 				else:
@@ -423,12 +425,40 @@ class image2label(object):
 				else:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
 				self.loss_op = 1. - jaccard
-			elif (self.loss_name == "weightd_jaccard"):
+			elif (self.loss_name == "weighted_jaccard"):
 				if self.dimension == 2:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weighted=True)
 				else:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weighted=True)
 				self.loss_op = 1. - jaccard
+			elif (self.loss_name == "mixed_sorensen"):
+				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				if self.dimension == 2:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen',axis=(1,2))
+				else:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen')
+				self.loss_op = (1. - sorensen) + xent
+			elif (self.loss_name == "mixed_weighted_sorensen"):
+				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				if self.dimension == 2:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weighted=True)
+				else:
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weighted=True)
+				self.loss_op = (1. - sorensen) + xent
+			elif (self.loss_name == "mixed_jaccard"):
+				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				if self.dimension == 2:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2))
+				else:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
+				self.loss_op = (1. - jaccard) + xent
+			elif (self.loss_name == "mixed_weighted_jaccard"):
+				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				if self.dimension == 2:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weighted=True)
+				else:
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weighted=True)
+				self.loss_op = (1. - jaccard) + xent
 			else:
 				sys.exit("Invalid loss function")
 
@@ -455,7 +485,7 @@ class image2label(object):
 					else:
 						pred_log = tf.cast(self.pred_op[batch:batch+1,:,:,:]*math.floor(255/(self.output_channel_num)), dtype=tf.uint8)
 					
-					tf.summary.image("pred", tf.transpose(pred_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
+					tf.summary.image("pred"+"_batch"+str(batch), tf.transpose(pred_log,[3,1,2,0]),max_outputs=self.patch_shape[-1])
 
 		# accuracy of the model
 		with tf.name_scope("metrics"):
@@ -599,10 +629,9 @@ class image2label(object):
 
 					# print("{}: Local variable initialize ok".format(datetime.datetime.now()))
 					self.network.is_training = True
-					# print("{}: Set network to training ok".format(datetime.datetime.now()))
+					print("{}: Set network to training ok".format(datetime.datetime.now()))
 					image, label = self.sess.run(self.next_element_train)
-
-					# print("{}: Get next element train ok".format(datetime.datetime.now()))
+					print("{}: Get next element train ok".format(datetime.datetime.now()))
 
 					if self.dimension == 2:
 						label = label[:,:,:,np.newaxis]
@@ -634,11 +663,15 @@ class image2label(object):
 					# testing phase
 					if self.testing and (self.global_step_op.eval()%self.test_step == 0):
 						self.sess.run(tf.local_variables_initializer())
-						self.network.is_training = False
+						print("{}: Set network to training ok".format(datetime.datetime.now()))
+						train_phase = True
+						self.network.is_training = train_phase
 						try:
 							image, label = self.sess.run(self.next_element_test)
 						except tf.errors.OutOfRangeError:
+							self.sess.run(self.test_iterator.initializer)
 							image, label = self.sess.run(self.next_element_test)
+						print("{}: Get next element test ok".format(datetime.datetime.now()))
 								
 						if self.dimension == 2:
 							label = label[:,:,:,np.newaxis]
@@ -648,7 +681,7 @@ class image2label(object):
 						summary, loss = self.sess.run([summary_op, self.loss_op],feed_dict={
 							self.images_placeholder: image,
 							self.labels_placeholder: label,
-							self.network.train_phase: False
+							self.network.train_phase: train_phase
 						})
 
 						print('{}: Segmentation testing loss: {}'.format(datetime.datetime.now(), str(loss)))
@@ -767,17 +800,19 @@ class image2label(object):
 		p.join()
 
 		# acutal segmentation
+		train_phase = True
+
 		for i in tqdm(range(len(batches))):
 			batch = batches[i]
 
 			if self.evaluate_probability_output:
 				[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 					'images_placeholder:0': batch, 
-					'train_phase_placeholder:0': False})
+					'train_phase_placeholder:0': train_phase})
 			else:
 				pred = self.sess.run('predicted_label/prediction:0', feed_dict={
 					'images_placeholder:0': batch, 
-					'train_phase_placeholder:0': False})
+					'train_phase_placeholder:0': train_phase})
 
 			for j in range(pred.shape[0]):
 				istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
@@ -929,7 +964,7 @@ class image2label(object):
 
 					[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 						'images_placeholder:0': image_batch, 
-						'train_phase_placeholder:0': False})
+						'train_phase_placeholder:0': True})
 
 					label_np[istart:iend, jstart:jend] += pred[0,:,:]
 					if self.evaluate_probability_output:
