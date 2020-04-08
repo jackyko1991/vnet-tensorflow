@@ -287,15 +287,15 @@ class image2label(object):
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
+					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
 					# NiftiDataset.BSplineDeformation(randomness=2),
 					# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.5,0.5,0.5)),
-					# NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
+					NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
 					# NiftiDataset3D.RandomFlip([True, False, False]),
 					NiftiDataset3D.RandomNoise()
 					]
@@ -304,15 +304,15 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
+					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
 					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
 					# NiftiDataset.BSplineDeformation(),
 					# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.75,0.75,0.75)),
-					# NiftiDataset.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
+					NiftiDataset3D.ConfidenceCrop2((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer),rand_range=32,probability=0.8),
 					# NiftiDataset.RandomFlip([True, False, False]),
 					]
 
@@ -664,12 +664,8 @@ class image2label(object):
 					if self.testing and (self.global_step_op.eval()%self.test_step == 0):
 						self.sess.run(tf.local_variables_initializer())
 						print("{}: Set network to training ok".format(datetime.datetime.now()))
-<<<<<<< HEAD
 						train_phase = True
 						self.network.is_training = train_phase
-=======
-						self.network.is_training = False
->>>>>>> e01be737895bc135e5e84eb6c74d0ca805ce482e
 						try:
 							image, label = self.sess.run(self.next_element_test)
 						except tf.errors.OutOfRangeError:
