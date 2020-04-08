@@ -2,14 +2,33 @@ import os
 import SimpleITK as sitk
 from tqdm import tqdm
 
-SRC_DIR = "../../data_lits/testing"
-TGT_DIR = "../../data_lits/testing"
+SRC_DIR = "../../data_lits/training"
+TGT_DIR = "/mnt/data_disk/lits_crop/training"
 SELECT_LABEL = [1,2]
 SRC_IMG_NAME = "image.nii"
 SRC_LABEL_NAME = "label.nii"
 TGT_IMG_NAME = "image_cropped.nii"
 TGT_LABEL_NAME = "label_cropped.nii"
 BUFFER = 2
+MASK_IMAGE = True
+MASK_DILATION = 2
+
+def mask(image,label):
+	dilateFilter = sitk.BinaryDilateImageFilter()
+	dilateFilter.SetKernelRadius(MASK_DILATION)
+	label = dilateFilter.Execute(label)
+
+	label.SetSpacing(image.GetSpacing())
+	label.SetOrigin(image.GetOrigin())
+	label.SetDirection(image.GetDirection())
+
+	maskFilter = sitk.MaskNegatedImageFilter()
+	castFilter = sitk.CastImageFilter()
+	castFilter.SetOutputPixelType(sitk.sitkFloat32)
+	image = castFilter.Execute(image)
+	label = castFilter.Execute(label)
+	image = maskFilter.Execute(image,label)
+	return image
 
 def main():
 	binaryFilter = sitk.BinaryThresholdImageFilter()
@@ -40,6 +59,9 @@ def main():
 			binaryFilter.SetUpperThreshold(i) 
 			addFilter = sitk.AddImageFilter()
 			label_ = addFilter.Execute(label_,binaryFilter.Execute(label))
+
+		if MASK_IMAGE:
+			image = mask(image,label_)
 
 		# find bbox of label
 		labelShapeFilter = sitk.LabelShapeStatisticsImageFilter()

@@ -287,8 +287,8 @@ class image2label(object):
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -304,8 +304,8 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -664,8 +664,12 @@ class image2label(object):
 					if self.testing and (self.global_step_op.eval()%self.test_step == 0):
 						self.sess.run(tf.local_variables_initializer())
 						print("{}: Set network to training ok".format(datetime.datetime.now()))
+<<<<<<< HEAD
 						train_phase = True
 						self.network.is_training = train_phase
+=======
+						self.network.is_training = False
+>>>>>>> e01be737895bc135e5e84eb6c74d0ca805ce482e
 						try:
 							image, label = self.sess.run(self.next_element_test)
 						except tf.errors.OutOfRangeError:
