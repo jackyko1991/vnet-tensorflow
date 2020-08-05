@@ -63,6 +63,31 @@ def prepare_batch(image_ijk_patch_indices_dict):
 		
 	return image_batch
 
+def volume_threshold(image,volume):
+	ccFilter = sitk.ConnectedComponentImageFilter()
+	image = ccFilter.Execute(image)
+
+	statFilter = sitk.LabelShapeStatisticsImageFilter()
+	statFilter.Execute(image)
+
+	output_image = sitk.Image(image.GetSize(),sitk.sitkUInt8)
+	output_image.SetOrigin(image.GetOrigin())
+	output_image.SetSpacing(image.GetSpacing())
+	output_image.SetDirection(image.GetDirection())
+
+	for label in statFilter.GetLabels():
+		if statFilter.GetPhysicalSize(label)> volume:
+			thresholdFilter = sitk.BinaryThresholdImageFilter()
+			thresholdFilter.SetLowerThreshold(label)
+			thresholdFilter.SetUpperThreshold(label)
+			thresholdFilter.SetInsideValue(1)
+			thres_image = thresholdFilter.Execute(image)
+
+			addFilter = sitk.AddImageFilter()
+			output_image = addFilter.Execute(output_image,thres_image)
+
+	return output_image
+
 def evaluate():
 	"""evaluate the vnet model by stepwise moving along the 3D image"""
 	# restore model grpah
@@ -79,7 +104,7 @@ def evaluate():
 	transforms = [  
 		NiftiDataset.StatisticalNormalization(3.0, pre_norm=True),
 		# NiftiDataset.Normalization(),
-		NiftiDataset.Resample((0.25,0.25,0.25)),
+		NiftiDataset.Resample((json_config['TrainingSetting']['Spacing'][0],json_config['TrainingSetting']['Spacing'][1],json_config['TrainingSetting']['Spacing'][2])),
 		NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 		]
 
@@ -273,7 +298,15 @@ def evaluate():
 			
 			print("{}: Resampling label back to original image space...".format(datetime.datetime.now()))
 			label = resampler.Execute(label_tfm)
-			label_path = os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz')
+			castFilter = sitk.CastImageFilter()
+			castFilter.SetOutputPixelType(sitk.sitkUInt16)
+			label = castFilter.Execute(label)
+
+			# volume thresholding
+			if json_config['EvaluationSetting']['VolumeThreshold'] > 0:
+				label = volume_threshold(label,json_config['EvaluationSetting']['VolumeThreshold'])
+
+			label_path = os.path.join(FLAGS.data_dir,case,json_config['EvaluationSetting']['Data']['LabelFilename'])
 			writer.SetFileName(label_path)
 			writer.Execute(label)
 
@@ -281,7 +314,15 @@ def evaluate():
 
 			print("{}: Resampling probability map back to original image space...".format(datetime.datetime.now()))
 			prob = resampler.Execute(softmax_tfm)
-			prob_path = os.path.join(FLAGS.data_dir,case,'probability_vnet.nii.gz')
+
+			if json_config['EvaluationSetting']['VolumeThreshold'] > 0:
+				label = volume_threshold(label,json_config['EvaluationSetting']['VolumeThreshold'])
+				castFilter.SetOutputPixelType(sitk.sitkFloat32)
+				label = castFilter.Execute(label)
+				maskFilter = sitk.MaskNegatedImageFilter()
+				prob = maskFilter.Execute(prob,label)
+
+			prob_path = os.path.join(FLAGS.data_dir,case,json_config['EvaluationSetting']['Data']['ProbabilityFilename'])
 			writer.SetFileName(prob_path)
 			writer.Execute(prob)
 			print("{}: Save evaluate probability map at {} success".format(datetime.datetime.now(),prob_path))

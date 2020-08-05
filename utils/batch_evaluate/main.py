@@ -116,7 +116,7 @@ def get_args():
 		help='Evaluated filename',
 		type=str,
 		metavar='FILENAME',
-		default="./label_tf.nii.gz"
+		default="./label_vnet.nii.gz"
 		)
 	parser.add_argument(
 		'-c', '--config_json',
@@ -135,8 +135,8 @@ def get_args():
 		default="./tmp"
 		)
 
-	params = '--checkpoint_min 30000 \
-		--stride_inplane_min 118 \
+	params = '--checkpoint_min 37000 \
+		--stride_inplane_min 120 \
 		--stride_inplane_max 128 \
 		--stride_layer_min 118 \
 		--stride_layer_max 128 \

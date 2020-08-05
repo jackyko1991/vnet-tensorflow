@@ -296,6 +296,9 @@ class Batch_Evaluate:
 						if 'DICE' in self.mode or "DICE" in self.mode:
 							DICE.append(result['DICE'])
 							Jaccard.append(result['Jaccard'])
+
+						exit()
+
 					avg_result = {'Case': "average", 
 						'DICE': np.sum(DICE)/len(DICE), 
 						'Jaccard': np.sum(Jaccard)/len(Jaccard)}
@@ -310,6 +313,5 @@ class Batch_Evaluate:
 						max_jaccard = avg_result["Jaccard"]
 						best_jaccard_result = {"ckpt": ckpt, "stride_inplane": stride_inplane, "stride_layer": stride_layer}
 
-					exit()
 		print("Best DICE result:", best_dice_result)
 		print("Best Jaccard result:", best_jaccard_result)
