@@ -102,7 +102,7 @@ def evaluate():
 
 	# create transformations to image and labels
 	transforms = [  
-		NiftiDataset.StatisticalNormalization(3.0, pre_norm=True),
+		NiftiDataset.StatisticalNormalization(3.0, pre_norm=False),
 		# NiftiDataset.Normalization(),
 		NiftiDataset.Resample((json_config['TrainingSetting']['Spacing'][0],json_config['TrainingSetting']['Spacing'][1],json_config['TrainingSetting']['Spacing'][2])),
 		NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
@@ -252,7 +252,7 @@ def evaluate():
 				else:
 					[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 						'images_placeholder:0': batch, 
-						'train_phase_placeholder:0': False})
+						'train_phase_placeholder:0': True})
 
 				for j in range(pred.shape[0]):
 					istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
