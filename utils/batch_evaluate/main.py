@@ -108,7 +108,7 @@ def get_args():
 		help='Ground truth filename',
 		type=str,
 		metavar='FILENAME',
-		default="./label.nii.gz"
+		default="./3DRA_seg.nii.gz"
 		)
 	parser.add_argument(
 		'-e', '--evaluate_filename',
@@ -116,7 +116,15 @@ def get_args():
 		help='Evaluated filename',
 		type=str,
 		metavar='FILENAME',
-		default="./label_vnet.nii.gz"
+		default="./label_tf.nii.gz"
+		)
+	parser.add_argument(
+		'-c', '--config_json',
+		dest='config_json',
+		help='Config JSON file',
+		type=str,
+		metavar='FILENAME',
+		default="./config.json"
 		)
 	parser.add_argument(
 		'-o', '--output',
@@ -127,16 +135,18 @@ def get_args():
 		default="./tmp"
 		)
 
-	params = '--checkpoint_min 122455 \
-		--stride_inplane_min 192 \
-		--stride_inplane_max 192 \
-		--stride_layer_min 16 \
-		--stride_layer_max 16 \
-		--patch_size 192 \
-		--patch_layer 16 \
-		--batch 5 \
-		--data_dir ./data_WML/evaluate \
-		--checkpoint_dir ./tmp/ckpt \
+	params = '--checkpoint_min 30000 \
+		--stride_inplane_min 118 \
+		--stride_inplane_max 128 \
+		--stride_layer_min 118 \
+		--stride_layer_max 128 \
+		--patch_size 128 \
+		--patch_layer 128 \
+		--batch 1 \
+		--data_dir /home/jacky/Projects/vnet-tensorflow/data_3DRA/evaluate \
+		--checkpoint_dir /home/jacky/Projects/vnet-tensorflow/tmp_3DRA_0.25/ckpt \
+		--output /home/jacky/Projects/vnet-tensorflow/tmp_3DRA_0.25 \
+		--config_json  /home/jacky/Projects/vnet-tensorflow/config_3DRA.json \
 	'
 	args = parser.parse_args(params.split())
 	# args = parser.parse_args()
@@ -151,6 +161,7 @@ def get_args():
 
 def main(args):
 	be = batch_evaluate.Batch_Evaluate()
+	be.config_json = args.config_json
 	be.model_folder = args.checkpoint_dir
 	be.checkpoint_min = args.checkpoint_min
 	be.checkpoint_max = args.checkpoint_max

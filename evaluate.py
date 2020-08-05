@@ -3,7 +3,7 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import NiftiDataset
+import NiftiDataset3D as NiftiDataset
 import os
 import datetime
 import SimpleITK as sitk
@@ -77,9 +77,9 @@ def evaluate():
 
 	# create transformations to image and labels
 	transforms = [  
-		NiftiDataset.StatisticalNormalization(2.8, pre_norm=True),
+		NiftiDataset.StatisticalNormalization(3.0, pre_norm=True),
 		# NiftiDataset.Normalization(),
-		NiftiDataset.Resample((0.75,0.75,0.75)),
+		NiftiDataset.Resample((0.25,0.25,0.25)),
 		NiftiDataset.Padding((FLAGS.patch_size, FLAGS.patch_size, FLAGS.patch_layer)),
 		]
 
@@ -100,14 +100,15 @@ def evaluate():
 			image_paths = []
 			image_file_exists = True
 			for image_channel in range(input_channel_num):
-				image_paths.append(os.path.join(FLAGS.data_dir,case,json_config['TrainingSetting']['Data']['ImageFilenames'][image_channel]))
+				image_paths.append(os.path.join(FLAGS.data_dir,case,json_config['EvaluationSetting']['Data']['ImageFilenames'][image_channel]))
 
 				if not os.path.exists(image_paths[image_channel]):
 					image_file_exists = False
 					break
 
 			if not image_file_exists:
-				print("{}: Image file not found at {}".format(datetime.datetime.now(),os.path.dirname(image_paths[0])))
+				# print("{}: Image file not found at {}".format(datetime.datetime.now(),os.path.dirname(image_paths[0])))
+				print("{}: Image file not found at {}".format(datetime.datetime.now(),image_paths[0]))
 				break
 
 			print("{}: Evaluating image at {}".format(datetime.datetime.now(),os.path.dirname(image_paths[0])))
@@ -218,15 +219,16 @@ def evaluate():
 			for i in tqdm(range(len(batches))):
 				batch = batches[i]
 				if FLAGS.attention:
-					[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={
+					[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 						'images_placeholder:0': batch, 
-						'vnet/train_phase_placeholder:0': False,
+						'train_phase_placeholder:0': False,
 						'attention/train_phase_placeholder:0': False,
 						'output/train_phase_placeholder:0': False})
 				else:
-					[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax/softmax:0'], feed_dict={
+					[pred, softmax] = sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 						'images_placeholder:0': batch, 
-						'vnet/train_phase_placeholder:0': False})
+						'train_phase_placeholder:0': False})
+
 				for j in range(pred.shape[0]):
 					istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
 					iend = image_ijk_patch_indices_dicts[i]['indexes'][j][1]
