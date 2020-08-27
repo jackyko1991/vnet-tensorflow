@@ -1151,7 +1151,7 @@ class image2label(object):
 
 			# largest connected component
 			if self.evaluate_lcc:
-				label = LargestConnectedComponent(label)
+				label = ExtractLargestConnectedComponents(label)
 
 			# volume threshold
 			if self.evaluate_volume_threshold > 0:
