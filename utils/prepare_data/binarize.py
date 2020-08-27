@@ -2,14 +2,15 @@ import os
 import SimpleITK as sitk
 from tqdm import tqdm
 
-SRC_DIR = "../../data_lits/training"
-TGT_DIR = "../../data_lits/training"
-SELECT_LABEL = [1,2]
-MASK_LABEL = [1,2]
-SRC_IMG_NAME = "image_crop.nii"
-SRC_LABEL_NAME = "label_crop.nii"
-MASKED_IMG_NAME = "image_masked.nii"
-TGT_LABEL_NAME = "label_masked.nii"
+SRC_DIR = "/mnt/data_disk/lits_crop/testing"
+TGT_DIR = "/mnt/data_disk/lits_crop/testing"
+SELECT_LABEL = [2]
+MASK_LABEL = []
+# MASK_LABEL = [1,2]
+SRC_IMG_NAME = "image_cropped.nii.gz"
+SRC_LABEL_NAME = "label_cropped.nii.gz"
+MASKED_IMG_NAME = "image_masked.nii.gz"
+TGT_LABEL_NAME = "label_masked.nii.gz"
 MASK_DILATION = 5
 
 def main():

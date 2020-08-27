@@ -4,6 +4,7 @@ import tensorflow as tf
 import csv
 import numpy as np
 import subprocess
+from tqdm import tqdm
 
 def dist(a,b):
 	x = 0
@@ -119,6 +120,7 @@ def Accuracy(groundTruth,output, tolerence=3, mode=None):
 
 class Batch_Evaluate:
 	def __init__(self,
+		config_json="./config.json",
 		model_folder="./tmp/ckpt",
 		output_folder ="./tmp",
 		data_folder = "./data",
@@ -135,6 +137,7 @@ class Batch_Evaluate:
 		checkpoint_max=9999999999999999999999999,
 		batch_size=5,
 		mode=["DICE"]):
+		self.config_json = config_json
 		self.model_folder = model_folder
 		self.output_folder = output_folder
 		self.data_folder = data_folder
@@ -209,7 +212,16 @@ class Batch_Evaluate:
 
 		# print(ckpts)
 
-		for ckpt in ckpts:
+		max_dice = 0
+		max_jaccard = 0
+
+		best_dice_result = {"ckpt": ckpts[0], "stride_inplane": self.stride_inplane_min, "stride_layer": self.stride_layer_min}
+		best_jaccard_result = {"ckpt": ckpts[0], "stride_inplane": self.stride_inplane_min, "stride_layer": self.stride_layer_min}
+
+		pbar = tqdm(ckpts)
+		for ckpt in pbar:
+			pbar.set_description(ckpt)
+
 			model_path = os.path.join(self._model_folder,ckpt)
 			checkpoint_path = os.path.join(self._model_folder,ckpt.split(".")[0])
 			checkpoint_num = int(ckpt.split(".")[0].split("-")[1])
@@ -221,6 +233,7 @@ class Batch_Evaluate:
 				for stride_layer in range(self.stride_layer_min,self.stride_layer_max+1, self.step):
 					command = "python evaluate.py " + \
 						"--data_dir " + self._data_folder + " " + \
+						"--config_json " + self.config_json + " " + \
 						"--model_path " + model_path +  " " +\
 						"--checkpoint_path " + checkpoint_path +  " " +\
 						"--batch_size " + str(self.batch_size) + " " +\
@@ -257,8 +270,9 @@ class Batch_Evaluate:
 					DICE = []
 					Jaccard = []
 
-					for case in os.listdir(self._data_folder):
-						print(case)
+					pbar_case = tqdm(os.listdir(self._data_folder))
+					for case in pbar_case:
+						pbar_case.set_description(case)
 						if not os.path.exists(os.path.join(self._data_folder, case, self.ground_truth_filename)):
 							continue
 						if not os.path.exists(os.path.join(self._data_folder, case, self.evaluated_filename)):
@@ -275,14 +289,29 @@ class Batch_Evaluate:
 
 						result = Accuracy(groundTruth, evaluated, mode=self.mode)
 						result['Case'] = case
-						print(result)
+						if "DICE" in self.mode:
+							tqdm.write("Case: {}, DICE: {}, Jaccard: {}".format(case,result["DICE"],result["Jaccard"]))
 						filewriter.writerow(result)
 
 						if 'DICE' in self.mode or "DICE" in self.mode:
 							DICE.append(result['DICE'])
 							Jaccard.append(result['Jaccard'])
+
+						exit()
+
 					avg_result = {'Case': "average", 
 						'DICE': np.sum(DICE)/len(DICE), 
 						'Jaccard': np.sum(Jaccard)/len(Jaccard)}
 					filewriter.writerow(avg_result)	
 					csvfile.close()
+
+					if avg_result["DICE"] > max_dice:
+						max_dice = avg_result["DICE"]
+						best_dice_result = {"ckpt": ckpt, "stride_inplane": stride_inplane, "stride_layer": stride_layer}
+
+					if avg_result["Jaccard"] > max_jaccard:
+						max_jaccard = avg_result["Jaccard"]
+						best_jaccard_result = {"ckpt": ckpt, "stride_inplane": stride_inplane, "stride_layer": stride_layer}
+
+		print("Best DICE result:", best_dice_result)
+		print("Best Jaccard result:", best_jaccard_result)
