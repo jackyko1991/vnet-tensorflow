@@ -104,6 +104,58 @@ def prepare_batch(image_ijk_patch_indices_dict):
 		
 	return image_batch
 
+def volume_threshold(image,volume):
+	ccFilter = sitk.ConnectedComponentImageFilter()
+	image = ccFilter.Execute(image)
+
+	statFilter = sitk.LabelShapeStatisticsImageFilter()
+	statFilter.Execute(image)
+
+	output_image = sitk.Image(image.GetSize(),sitk.sitkUInt8)
+	output_image.SetOrigin(image.GetOrigin())
+	output_image.SetSpacing(image.GetSpacing())
+	output_image.SetDirection(image.GetDirection())
+
+	for label in statFilter.GetLabels():
+		if statFilter.GetPhysicalSize(label)> volume:
+			thresholdFilter = sitk.BinaryThresholdImageFilter()
+			thresholdFilter.SetLowerThreshold(label)
+			thresholdFilter.SetUpperThreshold(label)
+			thresholdFilter.SetInsideValue(1)
+			thres_image = thresholdFilter.Execute(image)
+
+			addFilter = sitk.AddImageFilter()
+			output_image = addFilter.Execute(output_image,thres_image)
+
+	return output_image
+
+def ExtractLargestConnectedComponents(label):
+	castFilter = sitk.CastImageFilter()
+	castFilter.SetOutputPixelType(sitk.sitkUInt8)
+	label = castFilter.Execute(label)
+
+	ccFilter = sitk.ConnectedComponentImageFilter()
+	label = ccFilter.Execute(label)
+
+	labelStat = sitk.LabelShapeStatisticsImageFilter()
+	labelStat.Execute(label)
+
+	largestVol = 0
+	largestLabel = 0
+	for labelNum in labelStat.GetLabels():
+		if labelStat.GetPhysicalSize(labelNum) > largestVol:
+			largestVol = labelStat.GetPhysicalSize(labelNum)
+			largestLabel = labelNum
+	
+	thresholdFilter = sitk.BinaryThresholdImageFilter()
+	thresholdFilter.SetLowerThreshold(largestLabel)
+	thresholdFilter.SetUpperThreshold(largestLabel)
+	thresholdFilter.SetInsideValue(1)
+	thresholdFilter.SetOutsideValue(0)
+	label = thresholdFilter.Execute(label)
+
+	return label
+
 class image2label(object):
 	def __init__(self,sess,config):
 		"""
@@ -167,6 +219,8 @@ class image2label(object):
 		self.evaluate_stride = self.config['EvaluationSetting']['Stride']
 		self.evaluate_batch = self.config['EvaluationSetting']['BatchSize']
 		self.evaluate_probability_output = self.config['EvaluationSetting']['ProbabilityOutput']
+		self.evaluate_lcc = self.config['EvaluationSetting']['LargestConnectedComponent']
+		self.evaluate_volume_threshold = self.config['EvaluationSetting']['VolumeThreshold']
 
 		print("{}: Reading configuration file complete".format(datetime.datetime.now()))
 
@@ -287,8 +341,8 @@ class image2label(object):
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -304,8 +358,8 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
+					NiftiDataset3D.ManualNormalization(0,300),
+					# NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -1041,8 +1095,8 @@ class image2label(object):
 		else:
 			# create transformation on images and labels
 			transforms = [
-				NiftiDataset3D.StatisticalNormalization(2.5),
-				# NiftiDataset3D.ManualNormalization(0,300),
+				# NiftiDataset3D.StatisticalNormalization(2.5),
+				NiftiDataset3D.ManualNormalization(0,300),
 				NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 				NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 			]
@@ -1094,6 +1148,14 @@ class image2label(object):
 					label = self.evaluate_single_2D(sample,transforms)
 				else:
 					label = self.evaluate_single_3D(sample,transforms)
+
+			# largest connected component
+			if self.evaluate_lcc:
+				label = LargestConnectedComponent(label)
+
+			# volume threshold
+			if self.evaluate_volume_threshold > 0:
+				label = volume_threshold(label,self.evaluate_volume_threshold)
 
 			# save segmented label
 			writer = sitk.ImageFileWriter()
