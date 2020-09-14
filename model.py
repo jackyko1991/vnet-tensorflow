@@ -776,12 +776,14 @@ class image2label(object):
 		images = sample['image']
 		label = sample['label']
 
-		if self.evaluate_probability_output:
+		softmax_tfm = []
+		for channel in range(self.output_channel_num):
 			# create empty softmax image in pair with transformed image
-			softmax_tfm = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
-			softmax_tfm.SetOrigin(images[0].GetOrigin())
-			softmax_tfm.SetDirection(images[0].GetDirection())
-			softmax_tfm.SetSpacing(images[0].GetSpacing())
+			softmax_tfm_ = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
+			softmax_tfm_.SetOrigin(images[0].GetOrigin())
+			softmax_tfm_.SetDirection(images[0].GetDirection())
+			softmax_tfm_.SetSpacing(images[0].GetSpacing())
+			softmax_tfm.append(softmax_tfm)
 
 		# convert image to numpy array
 		for channel in range(self.input_channel_num):
@@ -795,15 +797,17 @@ class image2label(object):
 		label_np = sitk.GetArrayFromImage(label)
 		label_np = np.asarray(label_np,np.int32)
 
-		if self.evaluate_probability_output:
-			softmax_np = sitk.GetArrayFromImage(softmax_tfm)
-			softmax_np = np.asarray(softmax_np,np.float32)
+		softmax_np = []
+		for channel in range(self.output_channel_num):
+			softmax_np_ = sitk.GetArrayFromImage(softmax_tfm[channel])
+			softmax_np_ = np.asarray(softmax_np_,np.float32)
+			softmax_np.append(softmax_np_)
 
 		# unify numpy and sitk orientation
 		images_np = np.transpose(images_np,(2,1,0,3))
 		label_np = np.transpose(label_np,(2,1,0))
-		if self.evaluate_probability_output:
-			softmax_np = np.transpose(softmax_np,(2,1,0))
+		for channel in self.output_channel_num:
+			softmax_np[channel] = np.transpose(softmax_np[channel],(2,1,0))
 
 		# a weighting matrix will be used for averaging the overlapped region
 		weight_np = np.zeros(label_np.shape)
@@ -853,20 +857,15 @@ class image2label(object):
 		p.close()
 		p.join()
 
-		# acutal segmentation
+		# actual segmentation
 		train_phase = True
 
 		for i in tqdm(range(len(batches))):
 			batch = batches[i]
 
-			if self.evaluate_probability_output:
-				[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
-					'images_placeholder:0': batch, 
-					'train_phase_placeholder:0': train_phase})
-			else:
-				pred = self.sess.run('predicted_label/prediction:0', feed_dict={
-					'images_placeholder:0': batch, 
-					'train_phase_placeholder:0': train_phase})
+			[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
+				'images_placeholder:0': batch, 
+				'train_phase_placeholder:0': train_phase})
 
 			for j in range(pred.shape[0]):
 				istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
@@ -876,21 +875,25 @@ class image2label(object):
 				kstart = image_ijk_patch_indices_dicts[i]['indexes'][j][4]
 				kend = image_ijk_patch_indices_dicts[i]['indexes'][j][5]
 
-				label_np[istart:iend,jstart:jend,kstart:kend] += pred[j,:,:,:]
+				# label_np[istart:iend,jstart:jend,kstart:kend] += pred[j,:,:,:]
 				if self.evaluate_probability_output:
-					softmax_np[istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,1]
+					for channel in range(self.output_channel_num):
+						softmax_np[channel][istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,channel]
 				weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
 
 		print("{}: Evaluation complete".format(datetime.datetime.now()))
 		# eliminate overlapping region using the weighted value
-		label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+		# label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+		label_np = np.argmax(softmax_np,axis=0)
 		if self.evaluate_probability_output:
-			softmax_np = softmax_np/np.float32(weight_np)
+			for channel in range(self.output_channel_num):
+				softmax_np[channel] = softmax_np[channel]/np.float32(weight_np)
 
 		# convert back to sitk space
 		label_np = np.transpose(label_np,(2,1,0))
 		if self.evaluate_probability_output:
-			softmax_np = np.transpose(softmax_np,(2,1,0))
+			for channel in range(self.output_channel_num):
+				softmax_np[channel] = np.transpose(softmax_np[channel],(2,1,0))
 
 		# convert label numpy back to sitk image
 		label_tfm = sitk.GetImageFromArray(label_np)
@@ -898,11 +901,11 @@ class image2label(object):
 		label_tfm.SetDirection(images[0].GetDirection())
 		label_tfm.SetSpacing(images[0].GetSpacing())
 
-		if self.evaluate_probability_output:
-			softmax_tfm = sitk.GetImageFromArray(softmax_np)
-			softmax_tfm.SetOrigin(images[0].GetOrigin())
-			softmax_tfm.SetDirection(images[0].GetDirection())
-			softmax_tfm.SetSpacing(images[0].GetSpacing())
+		for channel in range(self.output_channel_num):
+			softmax_tfm[channel] = sitk.GetImageFromArray(softmax_np[channel])
+			softmax_tfm[channel].SetOrigin(images[0].GetOrigin())
+			softmax_tfm[channel].SetDirection(images[0].GetDirection())
+			softmax_tfm[channel].SetSpacing(images[0].GetSpacing())
 
 		# resample the label back to original space
 		resampler = sitk.ResampleImageFilter()
@@ -921,7 +924,8 @@ class image2label(object):
 		if self.evaluate_probability_output:
 			resampler.SetInterpolator(sitk.sitkLinear)
 			print("{}: Resampling probability map back to original image space...".format(datetime.datetime.now()))
-			prob = resampler.Execute(softmax_tfm)
+			for channel in self.output_channel_num:
+				prob[channel] = resampler.Execute(softmax_tfm[channel])
 
 		return label, prob
 
@@ -938,11 +942,14 @@ class image2label(object):
 		label = sample['label']
 
 		if self.evaluate_probability_output:
-			# create empty softmax image in pair with transformed image
-			prob = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
-			prob.SetOrigin(images[0].GetOrigin())
-			prob.SetDirection(images[0].GetDirection())
-			prob.SetSpacing(images[0].GetSpacing())
+			prob = []
+			for channel in range(self.output_channel_num):
+				# create empty softmax image in pair with transformed image
+				prob_ = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
+				prob_.SetOrigin(images[0].GetOrigin())
+				prob_.SetDirection(images[0].GetDirection())
+				prob_.SetSpacing(images[0].GetSpacing())
+				prob.append(prob_)
 
 		# loop over slices
 		for layer in tqdm(range(images[0].GetSize()[2])):
@@ -983,9 +990,10 @@ class image2label(object):
 			label_np = sitk.GetArrayFromImage(label_slice)
 			label_np = np.asarray(label_np, np.int32)
 
-			if self.evaluate_probability_output:
-				softmax_np = np.zeros(label_np.shape)
-				softmax_np = np.asarray(softmax_np,np.float32)
+			prob_np = []
+			for channel in range(self.output_channel_num):
+				prob_np_ = np.zeros(label_np.shape)
+				prob_np.append(np.asarray(prob_np_,np.float32))
 
 			# a weighting matrix will be used for averaging the overlapped region
 			weight_np = np.zeros(label_np.shape)
@@ -1020,15 +1028,16 @@ class image2label(object):
 						'images_placeholder:0': image_batch, 
 						'train_phase_placeholder:0': True})
 
-					label_np[istart:iend, jstart:jend] += pred[0,:,:]
-					if self.evaluate_probability_output:
-						softmax_np[istart:iend,jstart:jend] += softmax[0,:,:,1]
+					for channel in range(self.output_channel_num):
+						prob_np[channel][istart:iend,jstart:jend] += softmax[0,:,:,channel]
 					weight_np[istart:iend,jstart:jend] += 1.0
 
 			# eliminate overlapping region using the weighted value
-			label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+			label_np = np.argmax(prob_np,axis=0)
+
 			if self.evaluate_probability_output:
-				softmax_np = softmax_np/np.float32(weight_np)
+				for channel in range(self.output_channel_num):
+					prob_np[channel] = prob_np[channel]/np.float32(weight_np)
 
 			# convert label numpy back to sitk image
 			label_slice = sitk.GetImageFromArray(label_np)
@@ -1049,25 +1058,27 @@ class image2label(object):
 			castFilter = sitk.CastImageFilter()
 			castFilter.SetOutputPixelType(sitk.sitkUInt8)
 			label_slice = castFilter.Execute(label_slice)
+
 			label = sitk.Paste(label,label_slice, label_slice.GetSize(), destinationIndex=[0,0,layer])
 
 			if self.evaluate_probability_output:
-				prob_slice = sitk.GetImageFromArray(softmax_np)
-				prob_slice.SetOrigin(images_slice[0].GetOrigin())
-				prob_slice.SetDirection(images_slice[0].GetDirection())
-				prob_slice.SetSpacing(images_slice[0].GetSpacing())
+				for channel in range(self.output_channel_num):
+					prob_slice = sitk.GetImageFromArray(prob_np[channel])
+					prob_slice.SetOrigin(images_slice[0].GetOrigin())
+					prob_slice.SetDirection(images_slice[0].GetDirection())
+					prob_slice.SetSpacing(images_slice[0].GetSpacing())
 
-				# resample the label back to original space
-				resampler.SetInterpolator(sitk.sitkLinear)
-				prob_slice = resampler.Execute(prob_slice)
+					# resample the label back to original space
+					resampler.SetInterpolator(sitk.sitkLinear)
+					prob_slice = resampler.Execute(prob_slice)
 
-				prob_slice = sitk.JoinSeries(prob_slice)
-				prob = sitk.Paste(prob, prob_slice, prob_slice.GetSize(), destinationIndex=[0,0,layer])
+					prob_slice = sitk.JoinSeries(prob_slice)
+					prob[channel] = sitk.Paste(prob[channel], prob_slice, prob_slice.GetSize(), destinationIndex=[0,0,layer])
 
 		if not self.evaluate_probability_output:
 			return label
-
-		return label, prob
+		else:
+			return label, prob
 
 	def evaluate(self):
 		# read config to class variables
@@ -1164,10 +1175,15 @@ class image2label(object):
 			writer.SetFileName(label_path)
 			writer.Execute(label)
 
-			print("{}: Save evaluate label at {} success".format(datetime.datetime.now(),label_path))
+			tqdm.write("{}: Save evaluate label at {} success".format(datetime.datetime.now(),label_path))
 
 			if self.evaluate_probability_output:
-				prob_path = os.path.join(self.evaluate_data_dir,case,self.evaluate_probability_filename)
-				writer.SetFileName(prob_path)
-				writer.Execute(prob)
-				print("{}: Save evaluate probability map at {} success".format(datetime.datetime.now(),prob_path))
+				for channel in range(self.output_channel_num):
+					ext = ""
+					for ext_ in self.evaluate_probability_filename.split(".")[1:]:
+						ext += "." + ext_
+					output_filename = self.evaluate_probability_filename.split(".")[0] + "_" + str(self.label_classes[channel]) + ext
+					prob_path = os.path.join(self.evaluate_data_dir,case,output_filename)
+					writer.SetFileName(prob_path)
+					writer.Execute(prob[channel])
+					tqdm.write("{}: Save evaluate probability map at {} success".format(datetime.datetime.now(),prob_path))
