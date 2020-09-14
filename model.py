@@ -783,7 +783,7 @@ class image2label(object):
 			softmax_tfm_.SetOrigin(images[0].GetOrigin())
 			softmax_tfm_.SetDirection(images[0].GetDirection())
 			softmax_tfm_.SetSpacing(images[0].GetSpacing())
-			softmax_tfm.append(softmax_tfm)
+			softmax_tfm.append(softmax_tfm_)
 
 		# convert image to numpy array
 		for channel in range(self.input_channel_num):
@@ -806,7 +806,7 @@ class image2label(object):
 		# unify numpy and sitk orientation
 		images_np = np.transpose(images_np,(2,1,0,3))
 		label_np = np.transpose(label_np,(2,1,0))
-		for channel in self.output_channel_num:
+		for channel in range(self.output_channel_num):
 			softmax_np[channel] = np.transpose(softmax_np[channel],(2,1,0))
 
 		# a weighting matrix will be used for averaging the overlapped region
@@ -875,10 +875,8 @@ class image2label(object):
 				kstart = image_ijk_patch_indices_dicts[i]['indexes'][j][4]
 				kend = image_ijk_patch_indices_dicts[i]['indexes'][j][5]
 
-				# label_np[istart:iend,jstart:jend,kstart:kend] += pred[j,:,:,:]
-				if self.evaluate_probability_output:
-					for channel in range(self.output_channel_num):
-						softmax_np[channel][istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,channel]
+				for channel in range(self.output_channel_num):
+					softmax_np[channel][istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,channel]
 				weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
 
 		print("{}: Evaluation complete".format(datetime.datetime.now()))
@@ -924,10 +922,10 @@ class image2label(object):
 		if self.evaluate_probability_output:
 			resampler.SetInterpolator(sitk.sitkLinear)
 			print("{}: Resampling probability map back to original image space...".format(datetime.datetime.now()))
-			for channel in self.output_channel_num:
-				prob[channel] = resampler.Execute(softmax_tfm[channel])
+			for channel in range(self.output_channel_num):
+				softmax_tfm[channel] = resampler.Execute(softmax_tfm[channel])
 
-		return label, prob
+		return label, softmax_tfm
 
 	def evaluate_single_2D(self,sample, transforms):
 		input_origin = sample['image'][0].GetOrigin()
