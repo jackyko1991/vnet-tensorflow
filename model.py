@@ -289,6 +289,7 @@ class image2label(object):
 			sys.exit('Invalid Patch Shape (length should be 2 or 3)')
 
 		self.images_placeholder, self.labels_placeholder = self.placeholder_inputs(input_batch_shape,output_batch_shape)
+		self.dropout_placeholder = tf.placeholder(tf.float32,name="dropout_placeholder")
 
 		# plot input and output images to tensorboard
 		if self.image_log:
@@ -386,7 +387,7 @@ class image2label(object):
 		elif self.network_name == "UNet":
 			self.network = networks.UNet(
 				num_output_channels=self.output_channel_num,
-				dropout_rate=0.01,
+				dropout_rate=self.dropout_placeholder,
 				num_channels=4,
 				num_levels=4,
 				num_convolutions=2,
@@ -397,7 +398,7 @@ class image2label(object):
 		elif self.network_name =="VNet":
 			self.network = networks.VNet(
 				num_classes=self.output_channel_num,
-				dropout_rate=self.dropout_rate,
+				dropout_rate=self.dropout_placeholder,
 				num_channels=16,
 				num_levels=4,
 				num_convolutions=(1, 2, 3, 3),
@@ -695,6 +696,7 @@ class image2label(object):
 					train, summary, loss = self.sess.run([train_op,summary_op,self.loss_op], feed_dict={
 						self.images_placeholder: image,
 						self.labels_placeholder: label,
+						self.dropout_placeholder: self.dropout_rate,
 						self.network.train_phase: True
 						})
 					print('{}: Segmentation training loss: {}'.format(datetime.datetime.now(), str(loss)))
@@ -718,7 +720,7 @@ class image2label(object):
 					if self.testing and (self.global_step_op.eval()%self.test_step == 0):
 						self.sess.run(tf.local_variables_initializer())
 						print("{}: Set network to training ok".format(datetime.datetime.now()))
-						train_phase = True
+						train_phase = False
 						self.network.is_training = train_phase
 						try:
 							image, label = self.sess.run(self.next_element_test)
@@ -735,6 +737,7 @@ class image2label(object):
 						summary, loss = self.sess.run([summary_op, self.loss_op],feed_dict={
 							self.images_placeholder: image,
 							self.labels_placeholder: label,
+							self.dropout_placeholder: 0.0,
 							self.network.train_phase: train_phase
 						})
 
@@ -858,14 +861,12 @@ class image2label(object):
 		p.join()
 
 		# actual segmentation
-		train_phase = True
-
 		for i in tqdm(range(len(batches))):
 			batch = batches[i]
 
 			[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 				'images_placeholder:0': batch, 
-				'train_phase_placeholder:0': train_phase})
+				'train_phase_placeholder:0': False})
 
 			for j in range(pred.shape[0]):
 				istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
@@ -1024,7 +1025,8 @@ class image2label(object):
 
 					[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 						'images_placeholder:0': image_batch, 
-						'train_phase_placeholder:0': True})
+						'dropout_placeholder:0': 0.0,
+						'train_phase_placeholder:0': False})
 
 					for channel in range(self.output_channel_num):
 						prob_np[channel][istart:iend,jstart:jend] += softmax[0,:,:,channel]
