@@ -23,7 +23,7 @@
         "LogInterval": 25,
         "Networks": {
             "Name":"VNet",
-            "Dropout": 0.01
+            "Dropout": 0.1
         },
         "Loss": "weighted_sorensen",
         "Optimizer":{

@@ -342,8 +342,8 @@ class image2label(object):
 				trainTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
@@ -359,8 +359,8 @@ class image2label(object):
 				testTransforms = [
 					# NiftiDataset.Normalization(),
 					# NiftiDataset3D.ExtremumNormalization(0.1),
-					NiftiDataset3D.ManualNormalization(0,300),
-					# NiftiDataset3D.StatisticalNormalization(2.5),
+					# NiftiDataset3D.ManualNormalization(0,300),
+					NiftiDataset3D.StatisticalNormalization(2.5),
 					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
@@ -683,7 +683,7 @@ class image2label(object):
 					self.sess.run(tf.local_variables_initializer())
 
 					# print("{}: Local variable initialize ok".format(datetime.datetime.now()))
-					self.network.is_training = True
+					# self.network.is_training = True
 					print("{}: Set network to training ok".format(datetime.datetime.now()))
 					image, label = self.sess.run(self.next_element_train)
 					print("{}: Get next element train ok".format(datetime.datetime.now()))
@@ -720,8 +720,8 @@ class image2label(object):
 					if self.testing and (self.global_step_op.eval()%self.test_step == 0):
 						self.sess.run(tf.local_variables_initializer())
 						print("{}: Set network to training ok".format(datetime.datetime.now()))
-						train_phase = False
-						self.network.is_training = train_phase
+						# train_phase = False
+						# self.network.is_training = train_phase
 						try:
 							image, label = self.sess.run(self.next_element_test)
 						except tf.errors.OutOfRangeError:
@@ -738,7 +738,7 @@ class image2label(object):
 							self.images_placeholder: image,
 							self.labels_placeholder: label,
 							self.dropout_placeholder: 0.0,
-							self.network.train_phase: train_phase
+							self.network.train_phase: True
 						})
 
 						print('{}: Segmentation testing loss: {}'.format(datetime.datetime.now(), str(loss)))
@@ -750,7 +750,7 @@ class image2label(object):
 					print("{}: Training of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
 
 					start_epoch_inc.op.run()
-					self.network.is_training = False;
+					# self.network.is_training = False;
 					# print(start_epoch.eval())
 					# save the model at end of each epoch training
 					print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,self.ckpt_dir))
@@ -866,7 +866,8 @@ class image2label(object):
 
 			[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 				'images_placeholder:0': batch, 
-				'train_phase_placeholder:0': False})
+				'dropout_placeholder:0': 0.0,
+				'train_phase_placeholder:0': True})
 
 			for j in range(pred.shape[0]):
 				istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
@@ -1026,7 +1027,7 @@ class image2label(object):
 					[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 						'images_placeholder:0': image_batch, 
 						'dropout_placeholder:0': 0.0,
-						'train_phase_placeholder:0': False})
+						'train_phase_placeholder:0': True})
 
 					for channel in range(self.output_channel_num):
 						prob_np[channel][istart:iend,jstart:jend] += softmax[0,:,:,channel]
@@ -1106,8 +1107,8 @@ class image2label(object):
 		else:
 			# create transformation on images and labels
 			transforms = [
-				# NiftiDataset3D.StatisticalNormalization(2.5),
-				NiftiDataset3D.ManualNormalization(0,300),
+				NiftiDataset3D.StatisticalNormalization(2.5),
+				# NiftiDataset3D.ManualNormalization(0,300),
 				NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
 				NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
 			]
