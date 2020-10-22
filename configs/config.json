@@ -49,6 +49,8 @@
         "CheckpointPath": "./tmp/ckpt/checkpoint-23125",
         "Stride": [256,256,32],
         "BatchSize": 10,
-        "ProbabilityOutput":true
+        "ProbabilityOutput":true,
+        "LargestConnectedComponent": true,
+        "VolumeThreshold": 50
     }
 }
