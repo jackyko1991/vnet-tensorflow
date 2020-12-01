@@ -39,6 +39,11 @@ class NiftiDataset(object):
 
 	def get_dataset(self):
 		case_list = os.listdir(self.data_dir)
+		try:
+			case_list.remove(".DS_Store")
+			case_list.remove("@eaDir")
+		except:
+			pass
 
 		dataset = tf.data.Dataset.from_tensor_slices(case_list)
 		dataset = dataset.map(lambda case: tuple(tf.py_func(

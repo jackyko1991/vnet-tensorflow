@@ -82,7 +82,15 @@ class NiftiDataset(object):
 		# read all images to generate the candidate slice list
 		pbar = tqdm(os.listdir(self.data_dir))
 
+		ignore_files = [
+			".DS_Store",
+			"@eaDir"
+		]
+
 		for case in pbar:
+			if case in ignore_files:
+				continue
+
 			pbar.set_description("Loading {}...".format(case))
 
 			label = self.read_image(os.path.join(self.data_dir,case,self.label_filename))
