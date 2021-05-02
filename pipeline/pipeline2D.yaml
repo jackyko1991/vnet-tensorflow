@@ -1,0 +1,49 @@
+preprocess:
+  train: 
+    3D:
+
+    2D:
+      - name: "ManualNormalization"
+        variables: 
+          windowMin: 0
+          windowMax: 600
+      - name: "Resample"
+        variables: 
+          voxel_size: [0.75, 0.75]
+      - name: "Padding"
+        variables: 
+          output_size: [256,256]
+      - name: "RandomCrop"
+        variables: 
+          output_size: [256,256]
+  test:
+    3D:
+
+    2D:
+      - name: "ManualNormalization"
+        variables: 
+          windowMin: 0
+          windowMax: 600
+      - name: "Resample"
+        variables:
+          voxel_size: [0.75, 0.75]
+      - name: "Padding"
+        variables: 
+          output_size: [384,384]
+      - name: "RandomCrop"
+        variables: 
+          output_size: [384,384]
+
+  evaluate:
+    3D:
+    2D:
+      - name: "ManualNormalization"
+        variables: 
+          windowMin: 0
+          windowMax: 600
+      - name: "Resample"
+        variables:
+          voxel_size: [0.75, 0.75]
+      - name: "Padding"
+        variables: 
+          output_size: [384,384]

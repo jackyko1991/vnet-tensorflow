@@ -7,7 +7,7 @@ import math
 import random
 import multiprocessing
 from tqdm import tqdm
-import NiftiDataset3D
+from pipeline import NiftiDataset3D
 import threading
 
 def ExtractSliceFromImage(image_input):

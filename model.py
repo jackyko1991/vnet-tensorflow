@@ -1,8 +1,7 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' 
 import tensorflow as tf
-import NiftiDataset3D
-import NiftiDataset2D
+from pipeline import NiftiDataset3D, NiftiDataset2D
 import sys
 import datetime
 import numpy as np
@@ -11,6 +10,7 @@ import math
 import SimpleITK as sitk
 import multiprocessing
 from tqdm import tqdm
+import yaml
 
 def grayscale_to_rainbow(image):
 	# grayscale to rainbow colormap, convert to HSV (H = reversed grayscale from 0:2/3, S and V are all 1)
@@ -104,6 +104,58 @@ def prepare_batch(image_ijk_patch_indices_dict):
 		
 	return image_batch
 
+def volume_threshold(image,volume):
+	ccFilter = sitk.ConnectedComponentImageFilter()
+	image = ccFilter.Execute(image)
+
+	statFilter = sitk.LabelShapeStatisticsImageFilter()
+	statFilter.Execute(image)
+
+	output_image = sitk.Image(image.GetSize(),sitk.sitkUInt8)
+	output_image.SetOrigin(image.GetOrigin())
+	output_image.SetSpacing(image.GetSpacing())
+	output_image.SetDirection(image.GetDirection())
+
+	for label in statFilter.GetLabels():
+		if statFilter.GetPhysicalSize(label)> volume:
+			thresholdFilter = sitk.BinaryThresholdImageFilter()
+			thresholdFilter.SetLowerThreshold(label)
+			thresholdFilter.SetUpperThreshold(label)
+			thresholdFilter.SetInsideValue(1)
+			thres_image = thresholdFilter.Execute(image)
+
+			addFilter = sitk.AddImageFilter()
+			output_image = addFilter.Execute(output_image,thres_image)
+
+	return output_image
+
+def ExtractLargestConnectedComponents(label):
+	castFilter = sitk.CastImageFilter()
+	castFilter.SetOutputPixelType(sitk.sitkUInt8)
+	label = castFilter.Execute(label)
+
+	ccFilter = sitk.ConnectedComponentImageFilter()
+	label = ccFilter.Execute(label)
+
+	labelStat = sitk.LabelShapeStatisticsImageFilter()
+	labelStat.Execute(label)
+
+	largestVol = 0
+	largestLabel = 0
+	for labelNum in labelStat.GetLabels():
+		if labelStat.GetPhysicalSize(labelNum) > largestVol:
+			largestVol = labelStat.GetPhysicalSize(labelNum)
+			largestLabel = labelNum
+	
+	thresholdFilter = sitk.BinaryThresholdImageFilter()
+	thresholdFilter.SetLowerThreshold(largestLabel)
+	thresholdFilter.SetUpperThreshold(largestLabel)
+	thresholdFilter.SetInsideValue(1)
+	thresholdFilter.SetOutsideValue(0)
+	label = thresholdFilter.Execute(label)
+
+	return label
+
 class image2label(object):
 	def __init__(self,sess,config):
 		"""
@@ -157,6 +209,7 @@ class image2label(object):
 		self.min_pixel = self.config['TrainingSetting']['MinPixel']
 
 		self.loss_name = self.config['TrainingSetting']['Loss']
+		self.training_pipeline = self.config['TrainingSetting']['Pipeline']
 
 		# evaluation config
 		self.checkpoint_path = self.config['EvaluationSetting']['CheckpointPath']
@@ -167,6 +220,9 @@ class image2label(object):
 		self.evaluate_stride = self.config['EvaluationSetting']['Stride']
 		self.evaluate_batch = self.config['EvaluationSetting']['BatchSize']
 		self.evaluate_probability_output = self.config['EvaluationSetting']['ProbabilityOutput']
+		self.evaluate_lcc = self.config['EvaluationSetting']['LargestConnectedComponent']
+		self.evaluate_volume_threshold = self.config['EvaluationSetting']['VolumeThreshold']
+		self.evaluate_pipeline = self.config['EvaluationSetting']['Pipeline']
 
 		print("{}: Reading configuration file complete".format(datetime.datetime.now()))
 
@@ -235,6 +291,7 @@ class image2label(object):
 			sys.exit('Invalid Patch Shape (length should be 2 or 3)')
 
 		self.images_placeholder, self.labels_placeholder = self.placeholder_inputs(input_batch_shape,output_batch_shape)
+		self.dropout_placeholder = tf.placeholder(tf.float32,name="dropout_placeholder")
 
 		# plot input and output images to tensorboard
 		if self.image_log:
@@ -262,59 +319,83 @@ class image2label(object):
 		# create transformations to image and labels
 		# Force input pipepline to CPU:0 to avoid operations sometimes ended up at GPU and resulting a slow down
 		with tf.device('/cpu:0'):
+			# load the pipeline from yaml
+			with open(self.training_pipeline) as f:
+				pipeline_ = yaml.load(f)
+
 			if self.dimension == 2:
-				train_transforms_3d = []
-				
-				train_transforms_2d = [
-					NiftiDataset2D.ManualNormalization(0,300),
-					NiftiDataset2D.Resample(self.spacing),
-					NiftiDataset2D.Padding(self.patch_shape),
-					NiftiDataset2D.RandomCrop(self.patch_shape)
-				]
+				train_transform_3d = []
+				train_transform_2d = []
+				test_transform_3d = []
+				test_transform_2d = []
 
-				test_transforms_3d = []
+				if pipeline_["preprocess"]["train"]["3D"] is not None:
+					for transform in pipeline_["preprocess"]["train"]["3D"]:
+						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						train_transform_3d.append(tfm_cls)
 
-				test_transforms_2d = [
-					NiftiDataset2D.ManualNormalization(0,300),
-					NiftiDataset2D.Resample(self.spacing),
-					NiftiDataset2D.Padding(self.patch_shape),
-					NiftiDataset2D.RandomCrop(self.patch_shape)
-				]
+				if pipeline_["preprocess"]["train"]["2D"] is not None:
+					for transform in pipeline_["preprocess"]["train"]["2D"]:
+						tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
+						train_transform_2d.append(tfm_cls)
+
+				if pipeline_["preprocess"]["test"]["3D"] is not None:
+					for transform in pipeline_["preprocess"]["test"]["3D"]:
+						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						test_transform_3d.append(tfm_cls)
+
+				if pipeline_["preprocess"]["test"]["2D"] is not None:
+					for transform in pipeline_["preprocess"]["test"]["2D"]:
+						tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
+						test_transform_2d.append(tfm_cls)
 
 				trainTransforms = {"3D": train_transforms_3d, "2D": train_transforms_2d}
 				testTransforms = {"3D": test_transforms_3d, "2D": test_transforms_2d}
 			else:
-				trainTransforms = [
-					# NiftiDataset.Normalization(),
-					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
-					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
-					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
-					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
-					# NiftiDataset.BSplineDeformation(randomness=2),
-					# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.5,0.5,0.5)),
-					NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
-					# NiftiDataset3D.RandomFlip([True, False, False]),
-					NiftiDataset3D.RandomNoise()
-					]
+				trainTransforms = []
+				testTransforms = []
 
-				# use random crop for testing
-				testTransforms = [
-					# NiftiDataset.Normalization(),
-					# NiftiDataset3D.ExtremumNormalization(0.1),
-					# NiftiDataset3D.ManualNormalization(0,300),
-					NiftiDataset3D.StatisticalNormalization(2.5),
-					NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
-					NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-					# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
-					# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
-					# NiftiDataset.BSplineDeformation(),
-					# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.75,0.75,0.75)),
-					NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
-					# NiftiDataset.RandomFlip([True, False, False]),
-					]
+				if pipeline_["preprocess"]["train"]["3D"] is not None:
+					for transform in pipeline_["preprocess"]["train"]["3D"]:
+						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						trainTransforms.append(tfm_cls)
+
+				if pipeline_["preprocess"]["test"]["3D"] is not None:
+					for transform in pipeline_["preprocess"]["test"]["3D"]:
+						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						testTransforms.append(tfm_cls)
+
+				# trainTransforms = [
+				# 	# NiftiDataset.Normalization(),
+				# 	# NiftiDataset3D.ExtremumNormalization(0.1),
+				# 	NiftiDataset3D.ManualNormalization(0,600),
+				# 	# NiftiDataset3D.StatisticalNormalization(2.5),
+				# 	NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
+				# 	NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
+				# 	# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
+				# 	# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
+				# 	# NiftiDataset.BSplineDeformation(randomness=2),
+				# 	# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.5,0.5,0.5)),
+				# 	NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
+				# 	# NiftiDataset3D.RandomFlip([True, False, False]),
+				# 	NiftiDataset3D.RandomNoise()
+				# 	]
+
+				# # use random crop for testing
+				# testTransforms = [
+				# 	# NiftiDataset.Normalization(),
+				# 	# NiftiDataset3D.ExtremumNormalization(0.1),
+				# 	NiftiDataset3D.ManualNormalization(0,600),
+				# 	# NiftiDataset3D.StatisticalNormalization(2.5),
+				# 	NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
+				# 	NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
+				# 	# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
+				# 	# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
+				# 	# NiftiDataset.BSplineDeformation(),
+				# 	# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.75,0.75,0.75)),
+				# 	NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
+				# 	# NiftiDataset.RandomFlip([True, False, False]),
+				# 	]
 
 			# get input and output datasets
 			self.train_iterator = self.dataset_iterator(self.train_data_dir, trainTransforms)
@@ -332,7 +413,7 @@ class image2label(object):
 		elif self.network_name == "UNet":
 			self.network = networks.UNet(
 				num_output_channels=self.output_channel_num,
-				dropout_rate=0.01,
+				dropout_rate=self.dropout_placeholder,
 				num_channels=4,
 				num_levels=4,
 				num_convolutions=2,
@@ -343,7 +424,7 @@ class image2label(object):
 		elif self.network_name =="VNet":
 			self.network = networks.VNet(
 				num_classes=self.output_channel_num,
-				dropout_rate=self.dropout_rate,
+				dropout_rate=self.dropout_placeholder,
 				num_channels=16,
 				num_levels=4,
 				num_convolutions=(1, 2, 3, 3),
@@ -628,7 +709,7 @@ class image2label(object):
 					self.sess.run(tf.local_variables_initializer())
 
 					# print("{}: Local variable initialize ok".format(datetime.datetime.now()))
-					self.network.is_training = True
+					# self.network.is_training = True
 					print("{}: Set network to training ok".format(datetime.datetime.now()))
 					image, label = self.sess.run(self.next_element_train)
 					print("{}: Get next element train ok".format(datetime.datetime.now()))
@@ -641,6 +722,7 @@ class image2label(object):
 					train, summary, loss = self.sess.run([train_op,summary_op,self.loss_op], feed_dict={
 						self.images_placeholder: image,
 						self.labels_placeholder: label,
+						self.dropout_placeholder: self.dropout_rate,
 						self.network.train_phase: True
 						})
 					print('{}: Segmentation training loss: {}'.format(datetime.datetime.now(), str(loss)))
@@ -664,8 +746,8 @@ class image2label(object):
 					if self.testing and (self.global_step_op.eval()%self.test_step == 0):
 						self.sess.run(tf.local_variables_initializer())
 						print("{}: Set network to training ok".format(datetime.datetime.now()))
-						train_phase = True
-						self.network.is_training = train_phase
+						# train_phase = False
+						# self.network.is_training = train_phase
 						try:
 							image, label = self.sess.run(self.next_element_test)
 						except tf.errors.OutOfRangeError:
@@ -681,7 +763,8 @@ class image2label(object):
 						summary, loss = self.sess.run([summary_op, self.loss_op],feed_dict={
 							self.images_placeholder: image,
 							self.labels_placeholder: label,
-							self.network.train_phase: train_phase
+							self.dropout_placeholder: 0.0,
+							self.network.train_phase: True
 						})
 
 						print('{}: Segmentation testing loss: {}'.format(datetime.datetime.now(), str(loss)))
@@ -693,7 +776,7 @@ class image2label(object):
 					print("{}: Training of epoch {} complete, epoch loss: {}".format(datetime.datetime.now(),epoch+1,loss_sum/count))
 
 					start_epoch_inc.op.run()
-					self.network.is_training = False;
+					# self.network.is_training = False;
 					# print(start_epoch.eval())
 					# save the model at end of each epoch training
 					print("{}: Saving checkpoint of epoch {} at {}...".format(datetime.datetime.now(),epoch+1,self.ckpt_dir))
@@ -722,12 +805,14 @@ class image2label(object):
 		images = sample['image']
 		label = sample['label']
 
-		if self.evaluate_probability_output:
+		softmax_tfm = []
+		for channel in range(self.output_channel_num):
 			# create empty softmax image in pair with transformed image
-			softmax_tfm = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
-			softmax_tfm.SetOrigin(images[0].GetOrigin())
-			softmax_tfm.SetDirection(images[0].GetDirection())
-			softmax_tfm.SetSpacing(images[0].GetSpacing())
+			softmax_tfm_ = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
+			softmax_tfm_.SetOrigin(images[0].GetOrigin())
+			softmax_tfm_.SetDirection(images[0].GetDirection())
+			softmax_tfm_.SetSpacing(images[0].GetSpacing())
+			softmax_tfm.append(softmax_tfm_)
 
 		# convert image to numpy array
 		for channel in range(self.input_channel_num):
@@ -741,15 +826,17 @@ class image2label(object):
 		label_np = sitk.GetArrayFromImage(label)
 		label_np = np.asarray(label_np,np.int32)
 
-		if self.evaluate_probability_output:
-			softmax_np = sitk.GetArrayFromImage(softmax_tfm)
-			softmax_np = np.asarray(softmax_np,np.float32)
+		softmax_np = []
+		for channel in range(self.output_channel_num):
+			softmax_np_ = sitk.GetArrayFromImage(softmax_tfm[channel])
+			softmax_np_ = np.asarray(softmax_np_,np.float32)
+			softmax_np.append(softmax_np_)
 
 		# unify numpy and sitk orientation
 		images_np = np.transpose(images_np,(2,1,0,3))
 		label_np = np.transpose(label_np,(2,1,0))
-		if self.evaluate_probability_output:
-			softmax_np = np.transpose(softmax_np,(2,1,0))
+		for channel in range(self.output_channel_num):
+			softmax_np[channel] = np.transpose(softmax_np[channel],(2,1,0))
 
 		# a weighting matrix will be used for averaging the overlapped region
 		weight_np = np.zeros(label_np.shape)
@@ -799,20 +886,14 @@ class image2label(object):
 		p.close()
 		p.join()
 
-		# acutal segmentation
-		train_phase = True
-
+		# actual segmentation
 		for i in tqdm(range(len(batches))):
 			batch = batches[i]
 
-			if self.evaluate_probability_output:
-				[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
-					'images_placeholder:0': batch, 
-					'train_phase_placeholder:0': train_phase})
-			else:
-				pred = self.sess.run('predicted_label/prediction:0', feed_dict={
-					'images_placeholder:0': batch, 
-					'train_phase_placeholder:0': train_phase})
+			[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
+				'images_placeholder:0': batch, 
+				'dropout_placeholder:0': 0.0,
+				'train_phase_placeholder:0': True})
 
 			for j in range(pred.shape[0]):
 				istart = image_ijk_patch_indices_dicts[i]['indexes'][j][0]
@@ -822,21 +903,23 @@ class image2label(object):
 				kstart = image_ijk_patch_indices_dicts[i]['indexes'][j][4]
 				kend = image_ijk_patch_indices_dicts[i]['indexes'][j][5]
 
-				label_np[istart:iend,jstart:jend,kstart:kend] += pred[j,:,:,:]
-				if self.evaluate_probability_output:
-					softmax_np[istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,1]
+				for channel in range(self.output_channel_num):
+					softmax_np[channel][istart:iend,jstart:jend,kstart:kend] += softmax[j,:,:,:,channel]
 				weight_np[istart:iend,jstart:jend,kstart:kend] += 1.0
 
 		print("{}: Evaluation complete".format(datetime.datetime.now()))
 		# eliminate overlapping region using the weighted value
-		label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+		# label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+		label_np = np.argmax(softmax_np,axis=0)
 		if self.evaluate_probability_output:
-			softmax_np = softmax_np/np.float32(weight_np)
+			for channel in range(self.output_channel_num):
+				softmax_np[channel] = softmax_np[channel]/np.float32(weight_np)
 
 		# convert back to sitk space
 		label_np = np.transpose(label_np,(2,1,0))
 		if self.evaluate_probability_output:
-			softmax_np = np.transpose(softmax_np,(2,1,0))
+			for channel in range(self.output_channel_num):
+				softmax_np[channel] = np.transpose(softmax_np[channel],(2,1,0))
 
 		# convert label numpy back to sitk image
 		label_tfm = sitk.GetImageFromArray(label_np)
@@ -844,11 +927,11 @@ class image2label(object):
 		label_tfm.SetDirection(images[0].GetDirection())
 		label_tfm.SetSpacing(images[0].GetSpacing())
 
-		if self.evaluate_probability_output:
-			softmax_tfm = sitk.GetImageFromArray(softmax_np)
-			softmax_tfm.SetOrigin(images[0].GetOrigin())
-			softmax_tfm.SetDirection(images[0].GetDirection())
-			softmax_tfm.SetSpacing(images[0].GetSpacing())
+		for channel in range(self.output_channel_num):
+			softmax_tfm[channel] = sitk.GetImageFromArray(softmax_np[channel])
+			softmax_tfm[channel].SetOrigin(images[0].GetOrigin())
+			softmax_tfm[channel].SetDirection(images[0].GetDirection())
+			softmax_tfm[channel].SetSpacing(images[0].GetSpacing())
 
 		# resample the label back to original space
 		resampler = sitk.ResampleImageFilter()
@@ -867,9 +950,10 @@ class image2label(object):
 		if self.evaluate_probability_output:
 			resampler.SetInterpolator(sitk.sitkLinear)
 			print("{}: Resampling probability map back to original image space...".format(datetime.datetime.now()))
-			prob = resampler.Execute(softmax_tfm)
+			for channel in range(self.output_channel_num):
+				softmax_tfm[channel] = resampler.Execute(softmax_tfm[channel])
 
-		return label, prob
+		return label, softmax_tfm
 
 	def evaluate_single_2D(self,sample, transforms):
 		input_origin = sample['image'][0].GetOrigin()
@@ -884,11 +968,14 @@ class image2label(object):
 		label = sample['label']
 
 		if self.evaluate_probability_output:
-			# create empty softmax image in pair with transformed image
-			prob = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
-			prob.SetOrigin(images[0].GetOrigin())
-			prob.SetDirection(images[0].GetDirection())
-			prob.SetSpacing(images[0].GetSpacing())
+			prob = []
+			for channel in range(self.output_channel_num):
+				# create empty softmax image in pair with transformed image
+				prob_ = sitk.Image(images[0].GetSize(),sitk.sitkFloat32)
+				prob_.SetOrigin(images[0].GetOrigin())
+				prob_.SetDirection(images[0].GetDirection())
+				prob_.SetSpacing(images[0].GetSpacing())
+				prob.append(prob_)
 
 		# loop over slices
 		for layer in tqdm(range(images[0].GetSize()[2])):
@@ -929,9 +1016,10 @@ class image2label(object):
 			label_np = sitk.GetArrayFromImage(label_slice)
 			label_np = np.asarray(label_np, np.int32)
 
-			if self.evaluate_probability_output:
-				softmax_np = np.zeros(label_np.shape)
-				softmax_np = np.asarray(softmax_np,np.float32)
+			prob_np = []
+			for channel in range(self.output_channel_num):
+				prob_np_ = np.zeros(label_np.shape)
+				prob_np.append(np.asarray(prob_np_,np.float32))
 
 			# a weighting matrix will be used for averaging the overlapped region
 			weight_np = np.zeros(label_np.shape)
@@ -964,17 +1052,19 @@ class image2label(object):
 
 					[pred, softmax] = self.sess.run(['predicted_label/prediction:0','softmax:0'], feed_dict={
 						'images_placeholder:0': image_batch, 
+						'dropout_placeholder:0': 0.0,
 						'train_phase_placeholder:0': True})
 
-					label_np[istart:iend, jstart:jend] += pred[0,:,:]
-					if self.evaluate_probability_output:
-						softmax_np[istart:iend,jstart:jend] += softmax[0,:,:,1]
+					for channel in range(self.output_channel_num):
+						prob_np[channel][istart:iend,jstart:jend] += softmax[0,:,:,channel]
 					weight_np[istart:iend,jstart:jend] += 1.0
 
 			# eliminate overlapping region using the weighted value
-			label_np = np.rint(np.float32(label_np)/np.float32(weight_np) + 0.01)
+			label_np = np.argmax(prob_np,axis=0)
+
 			if self.evaluate_probability_output:
-				softmax_np = softmax_np/np.float32(weight_np)
+				for channel in range(self.output_channel_num):
+					prob_np[channel] = prob_np[channel]/np.float32(weight_np)
 
 			# convert label numpy back to sitk image
 			label_slice = sitk.GetImageFromArray(label_np)
@@ -995,25 +1085,27 @@ class image2label(object):
 			castFilter = sitk.CastImageFilter()
 			castFilter.SetOutputPixelType(sitk.sitkUInt8)
 			label_slice = castFilter.Execute(label_slice)
+
 			label = sitk.Paste(label,label_slice, label_slice.GetSize(), destinationIndex=[0,0,layer])
 
 			if self.evaluate_probability_output:
-				prob_slice = sitk.GetImageFromArray(softmax_np)
-				prob_slice.SetOrigin(images_slice[0].GetOrigin())
-				prob_slice.SetDirection(images_slice[0].GetDirection())
-				prob_slice.SetSpacing(images_slice[0].GetSpacing())
+				for channel in range(self.output_channel_num):
+					prob_slice = sitk.GetImageFromArray(prob_np[channel])
+					prob_slice.SetOrigin(images_slice[0].GetOrigin())
+					prob_slice.SetDirection(images_slice[0].GetDirection())
+					prob_slice.SetSpacing(images_slice[0].GetSpacing())
 
-				# resample the label back to original space
-				resampler.SetInterpolator(sitk.sitkLinear)
-				prob_slice = resampler.Execute(prob_slice)
+					# resample the label back to original space
+					resampler.SetInterpolator(sitk.sitkLinear)
+					prob_slice = resampler.Execute(prob_slice)
 
-				prob_slice = sitk.JoinSeries(prob_slice)
-				prob = sitk.Paste(prob, prob_slice, prob_slice.GetSize(), destinationIndex=[0,0,layer])
+					prob_slice = sitk.JoinSeries(prob_slice)
+					prob[channel] = sitk.Paste(prob[channel], prob_slice, prob_slice.GetSize(), destinationIndex=[0,0,layer])
 
 		if not self.evaluate_probability_output:
 			return label
-
-		return label, prob
+		else:
+			return label, prob
 
 	def evaluate(self):
 		# read config to class variables
@@ -1026,26 +1118,32 @@ class image2label(object):
 		imported_meta.restore(self.sess, self.checkpoint_path)
 		print("{}: Restore checkpoint success".format(datetime.datetime.now()))
 
-		if self.dimension == 2:
-			transforms3D = [
-				# NiftiDataset3D.StatisticalNormalization(2.5),
-			]
+		# load the pipeline from yaml
+		with open(self.evaluate_pipeline) as f:
+			pipeline_ = yaml.load(f)
 
-			transforms2D = [
-				NiftiDataset2D.ManualNormalization(0,300),
-				NiftiDataset2D.Resample((self.spacing[0],self.spacing[1])),
-				NiftiDataset2D.Padding((self.patch_shape[0], self.patch_shape[1]))
-			]
+		if self.dimension == 2:
+			transforms3D = []
+			transforms2D = []
+
+			if pipeline_["preprocess"]["evaluate"]["3D"] is not None:
+				for transform in pipeline_["preprocess"]["evaluate"]["3D"]:
+					tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+					transforms3D.append(tfm_cls)
+
+			if pipeline_["preprocess"]["evaluate"]["2D"] is not None:
+				for transform in pipeline_["preprocess"]["evaluate"]["2D"]:
+					tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
+					transforms2D.append(tfm_cls)
 
 			transforms = {'3D': transforms3D, '2D': transforms2D}
 		else:
 			# create transformation on images and labels
-			transforms = [
-				NiftiDataset3D.StatisticalNormalization(2.5),
-				# NiftiDataset3D.ManualNormalization(0,300),
-				NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
-				NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-			]
+			transforms = []
+			if pipeline_["preprocess"]["evaluate"]["3D"] is not None:
+				for transform in pipeline_["preprocess"]["evaluate"]["3D"]:
+					tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+					transforms.append(tfm_cls)
 
 		# start evaluation
 		print("{}: Start evaluation...".format(datetime.datetime.now()))
@@ -1095,6 +1193,14 @@ class image2label(object):
 				else:
 					label = self.evaluate_single_3D(sample,transforms)
 
+			# largest connected component
+			if self.evaluate_lcc:
+				label = ExtractLargestConnectedComponents(label)
+
+			# volume threshold
+			if self.evaluate_volume_threshold > 0:
+				label = volume_threshold(label,self.evaluate_volume_threshold)
+
 			# save segmented label
 			writer = sitk.ImageFileWriter()
 			
@@ -1102,10 +1208,15 @@ class image2label(object):
 			writer.SetFileName(label_path)
 			writer.Execute(label)
 
-			print("{}: Save evaluate label at {} success".format(datetime.datetime.now(),label_path))
+			tqdm.write("{}: Save evaluate label at {} success".format(datetime.datetime.now(),label_path))
 
 			if self.evaluate_probability_output:
-				prob_path = os.path.join(self.evaluate_data_dir,case,self.evaluate_probability_filename)
-				writer.SetFileName(prob_path)
-				writer.Execute(prob)
-				print("{}: Save evaluate probability map at {} success".format(datetime.datetime.now(),prob_path))
+				for channel in range(self.output_channel_num):
+					ext = ""
+					for ext_ in self.evaluate_probability_filename.split(".")[1:]:
+						ext += "." + ext_
+					output_filename = self.evaluate_probability_filename.split(".")[0] + "_" + str(self.label_classes[channel]) + ext
+					prob_path = os.path.join(self.evaluate_data_dir,case,output_filename)
+					writer.SetFileName(prob_path)
+					writer.Execute(prob[channel])
+					tqdm.write("{}: Save evaluate probability map at {} success".format(datetime.datetime.now(),prob_path))

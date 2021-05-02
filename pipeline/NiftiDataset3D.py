@@ -43,7 +43,8 @@ class NiftiDataset(object):
 		dataset = tf.data.Dataset.from_tensor_slices(case_list)
 		dataset = dataset.map(lambda case: tuple(tf.py_func(
 			self.input_parser, [case], [tf.float32,tf.int32])),
-			num_parallel_calls=multiprocessing.cpu_count())
+			num_parallel_calls=1)
+			# num_parallel_calls=multiprocessing.cpu_count())
 
 		self.dataset = dataset
 		self.data_size = len(case_list)
@@ -279,7 +280,7 @@ class Reorient(object):
 
 	def __init__(self, order):
 		self.name = 'Reoreient'
-		assert isinstance(order, (int, tuple))
+		assert isinstance(order, (int, tuple, list))
 		assert len(order) == 3
 		self.order = order
 
@@ -320,7 +321,7 @@ class Resample(object):
 	def __init__(self, voxel_size):
 		self.name = 'Resample'
 
-		assert isinstance(voxel_size, (float, tuple))
+		assert isinstance(voxel_size, (float, tuple, list))
 		if isinstance(voxel_size, float):
 			self.voxel_size = (voxel_size, voxel_size, voxel_size)
 		else:
@@ -372,7 +373,7 @@ class Padding(object):
 	def __init__(self, output_size):
 		self.name = 'Padding'
 
-		assert isinstance(output_size, (int, tuple))
+		assert isinstance(output_size, (int, tuple, list))
 		if isinstance(output_size, int):
 			self.output_size = (output_size, output_size, output_size)
 		else:
@@ -432,7 +433,7 @@ class RandomCrop(object):
 	def __init__(self, output_size, drop_ratio=0.1, min_pixel=1):
 		self.name = 'Random Crop'
 
-		assert isinstance(output_size, (int, tuple))
+		assert isinstance(output_size, (int, tuple, list))
 		if isinstance(output_size, int):
 			self.output_size = (output_size, output_size, output_size)
 		else:
@@ -551,14 +552,14 @@ class ConfidenceCrop(object):
 	def __init__(self, output_size, sigma=2.5):
 		self.name = 'Confidence Crop'
 
-		assert isinstance(output_size, (int, tuple))
+		assert isinstance(output_size, (int, tuple, list))
 		if isinstance(output_size, int):
 			self.output_size = (output_size, output_size, output_size)
 		else:
 			assert len(output_size) == 3
 			self.output_size = output_size
 
-		assert isinstance(sigma, (float, tuple))
+		assert isinstance(sigma, (float, tuple, list))
 		if isinstance(sigma, float) and sigma >= 0:
 			self.sigma = (sigma,sigma,sigma)
 		else:
@@ -635,14 +636,14 @@ class ConfidenceCrop2(object):
 	def __init__(self, output_size, rand_range=3,probability=0.5, random_empty_region=False):
 		self.name = 'Confidence Crop 2'
 
-		assert isinstance(output_size, (int, tuple))
+		assert isinstance(output_size, (int, tuple, list))
 		if isinstance(output_size, int):
 			self.output_size = (output_size, output_size, output_size)
 		else:
 			assert len(output_size) == 3
 			self.output_size = output_size
 
-		assert isinstance(rand_range, (int,tuple))
+		assert isinstance(rand_range, (int,tuple, list))
 		if isinstance(rand_range, int) and rand_range >= 0:
 			self.rand_range = (rand_range,rand_range,rand_range)
 		else:
