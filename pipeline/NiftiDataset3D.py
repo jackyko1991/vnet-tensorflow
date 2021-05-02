@@ -39,6 +39,11 @@ class NiftiDataset(object):
 
 	def get_dataset(self):
 		case_list = os.listdir(self.data_dir)
+		try:
+			case_list.remove(".DS_Store")
+			case_list.remove("@eaDir")
+		except:
+			pass
 
 		dataset = tf.data.Dataset.from_tensor_slices(case_list)
 		dataset = dataset.map(lambda case: tuple(tf.py_func(
@@ -122,7 +127,7 @@ class NiftiDataset(object):
 				try:
 					sample = transform(sample)
 				except:
-					print("Dataset preprocessing error: {}".format(case))
+					print("Dataset preprocessing error: {} transform: {}".format(case,transform.name))
 					exit()
 				
 		# convert sample to tf tensors
@@ -718,7 +723,10 @@ class ConfidenceCrop2(object):
 		contain_label = False
 		while not contain_label:
 			for i in range(3):
-				index[i] = random.choice(range(0,label.GetSize()[i]-self.output_size[i]-1))
+				if label.GetSize()[i]-self.output_size[i] == 0:
+					index[i] = 0
+				else:
+					index[i] = random.choice(range(0,label.GetSize()[i]-self.output_size[i]-1))
 			roiFilter = sitk.RegionOfInterestImageFilter()
 			roiFilter.SetSize(self.output_size)
 			roiFilter.SetIndex(index)
@@ -737,7 +745,10 @@ class ConfidenceCrop2(object):
 	def RandomRegion(self,image, label):
 		index = [0,0,0]
 		for i in range(3):
-			index[i] = random.choice(range(0,label.GetSize()[i]-self.output_size[i]-1))
+			if label.GetSize()[i]-self.output_size[i] == 0:
+				index[i] = 0
+			else:
+				index[i] = random.choice(range(0,label.GetSize()[i]-self.output_size[i]-1))
 		roiFilter = sitk.RegionOfInterestImageFilter()
 		roiFilter.SetSize(self.output_size)
 		roiFilter.SetIndex(index)
@@ -747,7 +758,6 @@ class ConfidenceCrop2(object):
 			image[image_channel] = roiFilter.Execute(image[image_channel])
 			
 		return image,label
-
 
 class BSplineDeformation(object):
 	"""

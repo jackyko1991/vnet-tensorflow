@@ -29,7 +29,8 @@ def convolution_block(layer_input, num_convolutions, keep_prob, activation_fn, i
     for i in range(num_convolutions):
         with tf.variable_scope('conv_' + str(i+1)):
             x = convolution(x, [5, 5, 5, n_channels, n_channels])
-            layer_input = tf.layers.batch_normalization(layer_input, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+            x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+            # layer_input = tf.layers.batch_normalization(layer_input, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             if i == num_convolutions - 1:
                 x = x + layer_input
             x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
@@ -39,14 +40,13 @@ def convolution_block(layer_input, num_convolutions, keep_prob, activation_fn, i
 
 
 def convolution_block_2(layer_input, fine_grained_features, num_convolutions, keep_prob, activation_fn, is_training):
-
     x = tf.concat((layer_input, fine_grained_features), axis=-1)
     n_channels = get_num_channels(layer_input)
     if num_convolutions == 1:
         with tf.variable_scope('conv_' + str(1)):
             x = convolution(x, [5, 5, 5, n_channels * 2, n_channels])
             x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
-            layer_input = tf.layers.batch_normalization(layer_input, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+            # layer_input = tf.layers.batch_normalization(layer_input, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             x = x + layer_input
             x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             x = activation_fn(x)
@@ -63,7 +63,7 @@ def convolution_block_2(layer_input, fine_grained_features, num_convolutions, ke
         with tf.variable_scope('conv_' + str(i+1)):
             x = convolution(x, [5, 5, 5, n_channels, n_channels])
             x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
-            layer_input = tf.layers.batch_normalization(layer_input, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
+            # layer_input = tf.layers.batch_normalization(layer_input, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
             if i == num_convolutions - 1:
                 x = x + layer_input
             x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=is_training)
@@ -71,7 +71,6 @@ def convolution_block_2(layer_input, fine_grained_features, num_convolutions, ke
             x = tf.nn.dropout(x, keep_prob)
 
     return x
-
 
 class VNet(object):
     def __init__(self,
@@ -86,7 +85,7 @@ class VNet(object):
         """
         Implements VNet architecture https://arxiv.org/abs/1606.04797
         :param num_classes: Number of output classes.
-        :param keep_prob: Dropout keep probability, set to 1.0 if not training or if no dropout is desired.
+        :param keep_prob: Dropout keep probability, set to 0.0 if not training or if no dropout is desired.
         :param num_channels: The number of output channels in the first level, this will be doubled every level.
         :param num_levels: The number of levels in the network. Default is 4 as in the paper.
         :param num_convolutions: An array with the number of convolutions at each level.
@@ -109,7 +108,10 @@ class VNet(object):
             self.activation_fn = prelu
 
     def network_fn(self, x):
-        keep_prob = self.keep_prob if self.is_training else 1.0
+        # keep_prob = self.keep_prob if self.is_training else 1.0
+        # use 0.0 for tf 1.15
+        # keep_prob = self.keep_prob if self.is_training else 0.0
+        keep_prob = self.keep_prob
         # if the input has more than 1 channel it has to be expanded because broadcasting only works for 1 input
         # channel
         input_channels = int(x.get_shape()[-1])
@@ -117,7 +119,6 @@ class VNet(object):
             if input_channels == 1:
                 x = tf.tile(x, [1, 1, 1, 1, self.num_channels])
                 x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=self.train_phase)
-
             else:
                 x = convolution(x, [5, 5, 5, input_channels, self.num_channels])
                 x = tf.layers.batch_normalization(x, momentum=0.99, epsilon=0.001,center=True, scale=True,training=self.train_phase)

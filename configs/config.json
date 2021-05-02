@@ -23,7 +23,7 @@
         "LogInterval": 25,
         "Networks": {
             "Name":"VNet",
-            "Dropout": 0.01
+            "Dropout": 0.1
         },
         "Loss": "weighted_sorensen",
         "Optimizer":{
@@ -49,7 +49,9 @@
         "CheckpointPath": "./tmp/ckpt/checkpoint-23125",
         "Stride": [256,256,32],
         "BatchSize": 10,
+        "Pipeline": "./pipeline/pipeline2D.yaml",
         "ProbabilityOutput":true,
-        "Pipeline": "./pipeline/pipeline2D.yaml"
+        "LargestConnectedComponent": true,
+        "VolumeThreshold": 50
     }
 }
