@@ -8,6 +8,12 @@ This is a Tensorflow implementation of the [V-Net](https://arxiv.org/abs/1606.04
 Here is an example graph of network this code implements. Channel depth may change owning to change in modality number and class number.
 ![VNetDiagram](VNetDiagram.png)
 
+## Content
+- [Features](#features)
+- [Development Progress]()
+- [Usage]()
+- 
+
 ### Features
 - 2D and 3D data processing ready
 - Augmented patching technique, requires less image input for training
@@ -29,6 +35,9 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [x] Multiclass output
 - [x] Weighted DICE loss
 - [x] C++ inference (Deprecated)
+- [x] Preprocessing pipeline from external file
+- [] Postprocessing pipeline after evaluation
+- [] Hyperparameter tuning
 
 ## Usage
 ### Required Libraries
@@ -110,22 +119,33 @@ Here we introduce serveral data augmentation skills that allow users to normaliz
 4. Random Crop (randomly select a zone in the 3D medical image in exact size as network input)
 5. Gaussian Noise
 
-The preprocessing pipeline can easily be adjusted with following example code in `train.py`:
-```python
-trainTransforms = [
-                NiftiDataset3D.Normalization(),
-                NiftiDataset3D.Resample(self.spacing[0],self.spacing[1],self.spacing[2]),
-                NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-                NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio,self.min_pixel),
-                NiftiDataset3D.RandomNoise()
-                ]
+The preprocessing pipeline can easily be adjusted with following example code in `./pipeline/pipeline2D.yaml`:
+```yaml
+train:
+  # it is possible to first perform normalization on 3D image first, e.g. image normalization using statistical values 
+  3D:
+
+  2D:
+    - name: "ManualNormalization"
+      variables: 
+        windowMin: 0
+        windowMax: 600
+    - name: "Resample"
+      variables: 
+        voxel_size: [0.75, 0.75]
+    - name: "Padding"
+      variables: 
+        output_size: [256,256]
+    - name: "RandomCrop"
+      variables: 
+        output_size: [256,256]
 ```
 
 For 2D image training mode, you need to provide transforms in 2D and 3D separately.
 
-To write you own preprocessing pipeline, you need to modify the preprocessing classes in `NiftiDataset.py`
+To write you own preprocessing pipeline, you need to modify the preprocessing classes in `./pipeline/NiftiDataset2D.py` or `./pipeline/NiftiDataset3D.py`.
 
-Additional preprocessing classes:
+Additional preprocessing classes (incomplete list, check `./pipeline/NiftiDataset2D.py` or `./pipeline/NiftiDataset3D.py` for full list):
 - StatisticalNormalization
 - Reorient (take care on the direction when performing evaluation)
 - Invert
@@ -137,13 +157,6 @@ Additional preprocessing classes:
 
   **Hint: Directly apply deformation is slow. Instead you can first perform cropping with a larger than patch size region then with deformation, then crop to actual patch size. If you apply deformation to exact training size region, it will create black zone which may affect final training accuracy.**
   
-  Example:
-  ```python
-  NiftiDataset.ConfidenceCrop((self.patch_shape[0]*2, self.patch_shape[1]*2, self.patch_shape[2]*2),(0.0001,0.0001,0.0001)),
-  NiftiDataset.BSplineDeformation(),
-  NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.5,0.5,0.25)),
-  ```
-  
 #### Tensorboard
 In training stage, result can be visualized via Tensorboard. Run the following command:
 ```console
@@ -154,23 +167,15 @@ Once TensorBoard is running, navigate your web browser to ```localhost:6006``` t
 
 Note: ```localhost``` may need to change to localhost name by your own in newer version of Tensorboard.
 
-### Evaluation
+### Evaluation (To be updated)
 To evaluate image data, first place the data in folder ```./data/evaluate```. Each image data should be placed in separate folder as indicated in the folder hierarchy
 
-There are several parameters you need to set in order manually
-- `model_path`, the default path is at `./tmp/ckpt/checkpoint-<global_step>.meta`
-- `checkpoint_dir`, the default path is at `./tmp/ckpt`
-- `patch_size`, this value need to be same as the one used in training
-- `patch_layer`, this value need to be same as the one used in training
-- `stride_inplane`, this value should be <= `patch_size`
-- `stride_layer`, this value should be <= `patch_layer`
-- `batch_size`, currently only support single batch processing
+There are several parameters you need to set in order manually in `EvaluationSetting` session of `./config/config.json`.
 
-Run `evaluate.py` after you have modified the corresponding variables. All data in `./data/evaluate` will be iterated. Segmented label is named as `label_vnet.nii.gz` in same folder of the respective `img.nii.gz`.
+Run `main.py -p evaluate --config_json ./config/config.json` after you have modified the corresponding variables. All data in `./data/evaluate` will be iterated. Segmented label is named specified ini `LabelFilename` and output in same folder of the respective input image files.
 
-You may change output label name by changing the line `writer.SetFileName(os.path.join(FLAGS.data_dir,case,'label_vnet.nii.gz'))`
-
-Note that you should keep preprocessing pipeline similar to the one in `train.py`, but without random cropping and noise.
+Note that you should keep preprocessing pipeline similar to the one during training, but without random cropping and noise. You may take reference to `evaluate` session in `./pipeline/pipeline2D.yaml`.
+#### Post Processing (To be updated)
 
 ## C++ Inference (Deprecated for newer version of Tensorflow)
 We provide a C++ inference example under directory [cxx](./cxx). For C++ implementation, please follow the guide [here](./cxx/README.md)
