@@ -8,13 +8,15 @@ def main():
 		reader = sitk.ImageFileReader()
 		reader.SetFileName(os.path.join(data_dir,case,"TOF.nii.gz"))
 		image = reader.Execute()
-		reader.SetFileName(os.path.join(data_dir,case,"aneurysms.nii.gz"))
+		reader.SetFileName(os.path.join(data_dir,case,"struct_aligned.nii.gz"))
 		label = reader.Execute()
 
 		if not (image.GetSize() == label.GetSize()):
 			print(case, "size")
 		if not (image.GetDirection() == label.GetDirection()):
 			print(case, "direction")
+			print(image.GetDirection())
+			print(label.GetDirection())
 		if not (image.GetOrigin() == label.GetOrigin()):
 			print(case, "origin")
 
