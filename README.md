@@ -10,9 +10,17 @@ Here is an example graph of network this code implements. Channel depth may chan
 
 ## Content
 - [Features](#features)
-- [Development Progress]()
-- [Usage]()
-- 
+- [Development Progress](#development-progress)
+- [Usage](#usage)
+  - [Required Libraries](#required-libraries)
+  - [Folder Hierarchy](#folder-hierarchy)
+  - [Training](#training)
+    - [Image Batch Preparation](#image-batch-preparation)
+    - [Tensorboard](#tensorboard)
+    - [Hyperparameter Tuning](#hyperparameter-tuning)
+  - [Evaluation](#evaluation)
+- [Citations](#citations)
+- [References](#references)
 
 ### Features
 - 2D and 3D data processing ready
@@ -167,7 +175,9 @@ Once TensorBoard is running, navigate your web browser to ```localhost:6006``` t
 
 Note: ```localhost``` may need to change to localhost name by your own in newer version of Tensorboard.
 
-### Evaluation (To be updated)
+#### Hyperparameter Tuning
+
+### Evaluation
 To evaluate image data, first place the data in folder ```./data/evaluate```. Each image data should be placed in separate folder as indicated in the folder hierarchy
 
 There are several parameters you need to set in order manually in `EvaluationSetting` session of `./config/config.json`.
