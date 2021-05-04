@@ -222,10 +222,7 @@ class image2label(object):
 		self.evaluate_probability_output = self.config['EvaluationSetting']['ProbabilityOutput']
 		self.evaluate_lcc = self.config['EvaluationSetting']['LargestConnectedComponent']
 		self.evaluate_volume_threshold = self.config['EvaluationSetting']['VolumeThreshold']
-<<<<<<< HEAD
 		self.evaluate_pipeline = self.config['EvaluationSetting']['Pipeline']
-=======
->>>>>>> 7da2b5c3873458c742c07941e7dff57ecca64cc3
 
 		print("{}: Reading configuration file complete".format(datetime.datetime.now()))
 
