@@ -34,6 +34,13 @@ def get_parser():
 		metavar='DIR'
 		)
 	parser.add_argument(
+		'-c',
+		dest='classname',
+		help='Classname file',
+		type=str,
+		metavar='TXT'
+		)
+	parser.add_argument(
 		'-f','--format', 
 		dest='format', 
 		help='Output image format',
@@ -92,6 +99,7 @@ def main(args):
 	bbox.min_intensity = args.min
 	bbox.max_intensity = args.max
 	bbox.opacity = args.opacity
+	bbox.classnames = args.classname
 	bbox.run()
 
 if __name__=="__main__":
