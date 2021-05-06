@@ -36,7 +36,7 @@ def get_parser():
 	parser.add_argument(
 		'-c',
 		dest='classname',
-		help='Classname file',
+		help='Classname json file',
 		type=str,
 		metavar='TXT'
 		)
@@ -99,7 +99,7 @@ def main(args):
 	bbox.min_intensity = args.min
 	bbox.max_intensity = args.max
 	bbox.opacity = args.opacity
-	bbox.classnames = args.classname
+	bbox.classname_file = args.classname
 	bbox.run()
 
 if __name__=="__main__":

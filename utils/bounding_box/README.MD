@@ -14,3 +14,6 @@ Quick example:
 ```bash
 $ python main.py image.nii.gz label.nii.gz ./output -o 0.7 -m 0 -M 80
 ```
+
+## To-do-list
+- [ ]Sagittal and coronal slicing

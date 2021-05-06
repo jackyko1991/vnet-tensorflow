@@ -4,6 +4,8 @@ import math
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
+import json
+from tqdm import tqdm
 
 def non_max_suppression_fast(boxes, overlapThresh):
 	# if there are no boxes, return an empty list
@@ -61,7 +63,7 @@ def non_max_suppression_fast(boxes, overlapThresh):
 	# integer data type
 	return boxes[pick].astype("int")
 
-def bboxes_from_slice(image_slice, label_slice,plot=False, min_intensity=-1024, max_intensity=1024, opacity=0,classnames=[],save_path=""):
+def bboxes_from_slice(image_slice, label_slice,plot=False, min_intensity=-1024, max_intensity=1024, opacity=0,classnames={},save_path=""):
 	labelStatFilter = sitk.LabelStatisticsImageFilter()
 	labelStatFilter.Execute(image_slice, label_slice)
 
@@ -125,8 +127,8 @@ def bboxes_from_slice(image_slice, label_slice,plot=False, min_intensity=-1024, 
 		elif label == 2:
 			color = "c"
 		rect = patches.Rectangle((x,y),w,h,linewidth=1,edgecolor=color,facecolor="none")
-		try:
-			ax.text(x,y-3, classnames[label], color="w")
+		if str(label) in classnames.keys():
+			ax.text(x,y-3, classnames[str(label)], color="w")
 
 		# Add the patch to the Axes
 		ax.add_patch(rect)
@@ -135,7 +137,10 @@ def bboxes_from_slice(image_slice, label_slice,plot=False, min_intensity=-1024, 
 		plt.show()
 
 	if save_path != "":
-		plt.savefig(save_path,bbox_inches='tight')
+		plt.savefig(save_path,bbox_inches='tight',transparent=True, pad_inches=0)
+
+	plt.clf()
+	plt.close()
 
 	return bboxes
 
@@ -160,9 +165,7 @@ class BoundingBox:
 		self.min_intensity=min_intensity
 		self.max_intensity=max_intensity
 		self.classname_file=""
-
-		# read classname file
-		self.classnames=[]
+		self.classnames={}
 
 	def run(self):
 		# check file existence
@@ -186,11 +189,13 @@ class BoundingBox:
 		label = reader.Execute()
 
 		# get image smallest spacing and convert to isotropic image
-		minSpacing = min(image.GetSpacing())
+		if self.direction == "axial":
+			minSpacing = min(image.GetSpacing()[0:2])
 		old_spacing = image.GetSpacing()
 		old_size = image.GetSize()
 
-		new_spacing = (minSpacing,minSpacing,minSpacing)
+		if self.direction == "axial":
+			new_spacing = (minSpacing,minSpacing,old_spacing[2])
 		new_size = [int(math.ceil(old_spacing[i]*old_size[i]/new_spacing[i])) for i in range(3)]
 		new_size = tuple(new_size)
 
@@ -208,10 +213,16 @@ class BoundingBox:
 		size = list(image.GetSize())
 		size[2] = 0
 
-		self.classnames = ["background", "ICH"]
+		# read class name file
+		if self.classname_file is not None:
+			if self.classname_file != "" and os.path.exists(self.classname_file):
+
+				with open(self.classname_file,"r") as f:
+					self.classnames = json.load(f)
 
 		if self.direction == "axial":
-			for z in range(image.GetSize()[2])[:]:
+			pbar = tqdm(range(image.GetSize()[2])[:])
+			for z in pbar:
 				index = [0, 0, z]
 				extractor = sitk.ExtractImageFilter()
 				extractor.SetSize(size)
