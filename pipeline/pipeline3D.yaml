@@ -1,3 +1,6 @@
+description: 3D segmentation pipeline
+disease: liver lesion
+modality: CT
 preprocess:
   train: 
     3D:

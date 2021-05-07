@@ -17,7 +17,7 @@ def grayscale_to_rainbow(image):
 	# then convert to RGB
 	H = tf.squeeze((1. - image)*2./3., axis=-1)
 	SV = tf.ones(H.get_shape())
-	HSV = tf.stack([H,SV,SV], axis=3)
+	HSV = tf.stack([H,SV,SV], axis=len(H.get_shape()))
 	RGB = tf.image.hsv_to_rgb(HSV)
 
 	return RGB
@@ -67,8 +67,9 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weighted=False
 		raise Exception("Unknown loss_type")
 
 	if weighted:
-		w = 1/(tf.reduce_sum(target*target, axis=axis) + smooth)
-		dice = tf.reduce_sum(2.* w * inse +smooth, axis=-1)/tf.reduce_sum(w*(l + r + smooth),axis=-1)
+		w = 1./(tf.reduce_sum(target*target, axis=axis) + smooth)
+		# w = tf.clip_by_value(w, 1e-17, 1.0 - 1e-7)
+		dice = tf.reduce_sum(2.* w * inse +smooth, axis=-1)/tf.reduce_sum(w*(l + r) + smooth,axis=-1)
 		dice = tf.reduce_mean(dice, name='dice_coe')
 	else:
 		# old axis=[0,1,2,3]
@@ -324,30 +325,30 @@ class image2label(object):
 				pipeline_ = yaml.load(f)
 
 			if self.dimension == 2:
-				train_transform_3d = []
-				train_transform_2d = []
-				test_transform_3d = []
-				test_transform_2d = []
+				train_transforms_3d = []
+				train_transforms_2d = []
+				test_transforms_3d = []
+				test_transforms_2d = []
 
 				if pipeline_["preprocess"]["train"]["3D"] is not None:
 					for transform in pipeline_["preprocess"]["train"]["3D"]:
 						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
-						train_transform_3d.append(tfm_cls)
+						train_transforms_3d.append(tfm_cls)
 
 				if pipeline_["preprocess"]["train"]["2D"] is not None:
 					for transform in pipeline_["preprocess"]["train"]["2D"]:
 						tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
-						train_transform_2d.append(tfm_cls)
+						train_transforms_2d.append(tfm_cls)
 
 				if pipeline_["preprocess"]["test"]["3D"] is not None:
 					for transform in pipeline_["preprocess"]["test"]["3D"]:
 						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
-						test_transform_3d.append(tfm_cls)
+						test_transforms_3d.append(tfm_cls)
 
 				if pipeline_["preprocess"]["test"]["2D"] is not None:
 					for transform in pipeline_["preprocess"]["test"]["2D"]:
 						tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
-						test_transform_2d.append(tfm_cls)
+						test_transforms_2d.append(tfm_cls)
 
 				trainTransforms = {"3D": train_transforms_3d, "2D": train_transforms_2d}
 				testTransforms = {"3D": test_transforms_3d, "2D": test_transforms_2d}
@@ -364,38 +365,6 @@ class image2label(object):
 					for transform in pipeline_["preprocess"]["test"]["3D"]:
 						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
 						testTransforms.append(tfm_cls)
-
-				# trainTransforms = [
-				# 	# NiftiDataset.Normalization(),
-				# 	# NiftiDataset3D.ExtremumNormalization(0.1),
-				# 	NiftiDataset3D.ManualNormalization(0,600),
-				# 	# NiftiDataset3D.StatisticalNormalization(2.5),
-				# 	NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
-				# 	NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-				# 	# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel),
-				# 	# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*3, FLAGS.patch_size*3, FLAGS.patch_layer*3),(0.0001,0.0001,0.0001)),
-				# 	# NiftiDataset.BSplineDeformation(randomness=2),
-				# 	# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.5,0.5,0.5)),
-				# 	NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
-				# 	# NiftiDataset3D.RandomFlip([True, False, False]),
-				# 	NiftiDataset3D.RandomNoise()
-				# 	]
-
-				# # use random crop for testing
-				# testTransforms = [
-				# 	# NiftiDataset.Normalization(),
-				# 	# NiftiDataset3D.ExtremumNormalization(0.1),
-				# 	NiftiDataset3D.ManualNormalization(0,600),
-				# 	# NiftiDataset3D.StatisticalNormalization(2.5),
-				# 	NiftiDataset3D.Resample((self.spacing[0],self.spacing[1],self.spacing[2])),
-				# 	NiftiDataset3D.Padding((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2])),
-				# 	# NiftiDataset3D.RandomCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),self.drop_ratio, self.min_pixel)
-				# 	# NiftiDataset.ConfidenceCrop((FLAGS.patch_size*2, FLAGS.patch_size*2, FLAGS.patch_layer*2),(0.0001,0.0001,0.0001)),
-				# 	# NiftiDataset.BSplineDeformation(),
-				# 	# NiftiDataset.ConfidenceCrop((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),(0.75,0.75,0.75)),
-				# 	NiftiDataset3D.ConfidenceCrop2((self.patch_shape[0], self.patch_shape[1], self.patch_shape[2]),rand_range=32,probability=0.8),
-				# 	# NiftiDataset.RandomFlip([True, False, False]),
-				# 	]
 
 			# get input and output datasets
 			self.train_iterator = self.dataset_iterator(self.train_data_dir, trainTransforms)
@@ -445,8 +414,10 @@ class image2label(object):
 		if self.image_log:
 			if self.dimension == 2:
 				for output_channel in range(self.output_channel_num):
-					# softmax_log = grayscale_to_rainbow(self.softmax_op[:,:,:,output_channel:output_channel+1])
-					softmax_log = self.softmax_op[:,:,:,output_channel:output_channel+1]
+					softmax_log = []
+					for batch in range(self.batch_size):
+						softmax_log.append(grayscale_to_rainbow(self.softmax_op[batch,:,:,output_channel:output_channel+1]))
+					softmax_log = tf.stack(softmax_log,axis=0)
 					softmax_log = tf.cast(softmax_log*255, dtype = tf.uint8)
 					tf.summary.image("softmax_" + str(self.label_classes[output_channel]),softmax_log,max_outputs=self.batch_size)
 			else:
@@ -592,18 +563,22 @@ class image2label(object):
 						tn, tn_op = tf.metrics.true_negatives(label_one_hot[:,:,:,i], pred_one_hot[:,:,:,i], name="true_negatives_"+str(self.label_classes[i]))
 						fp, fp_op = tf.metrics.false_positives(label_one_hot[:,:,:,i], pred_one_hot[:,:,:,i], name="false_positives_"+str(self.label_classes[i]))
 						fn, fn_op = tf.metrics.false_negatives(label_one_hot[:,:,:,i], pred_one_hot[:,:,:,i], name="false_negatives_"+str(self.label_classes[i]))
+						auc, auc_op = tf.metrics.auc(label_one_hot[:,:,:,i], self.softmax_op[:,:,:,i],name="auc_"+str(self.label_classes[i]))
 					else:
 						tp, tp_op = tf.metrics.true_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_positives_"+str(self.label_classes[i]))
 						tn, tn_op = tf.metrics.true_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="true_negatives_"+str(self.label_classes[i]))
 						fp, fp_op = tf.metrics.false_positives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_positives_"+str(self.label_classes[i]))
 						fn, fn_op = tf.metrics.false_negatives(label_one_hot[:,:,:,:,i], pred_one_hot[:,:,:,:,i], name="false_negatives_"+str(self.label_classes[i]))
+						auc, auc_op = tf.metrics.auc(label_one_hot[:,:,:,:,i], self.softmax_op[:,:,:,:,i],name="auc_"+str(self.label_classes[i]))
+
 					sensitivity_op = tf.divide(tf.cast(tp_op,tf.float32),tf.cast(tf.add(tp_op,fn_op),tf.float32))
 					specificity_op = tf.divide(tf.cast(tn_op,tf.float32),tf.cast(tf.add(tn_op,fp_op),tf.float32))
 					dice_op = 2.*tp_op/(2.*tp_op+fp_op+fn_op)
-				
+
 				tf.summary.scalar('sensitivity_'+str(self.label_classes[i]), sensitivity_op)
 				tf.summary.scalar('specificity_'+str(self.label_classes[i]), specificity_op)
 				tf.summary.scalar('dice_'+str(self.label_classes[i]), dice_op)
+				tf.summary.scalar('auc_'+str(self.label_classes[i]), auc_op)
 
 		print("{}: Metrics complete".format(datetime.datetime.now()))
 
