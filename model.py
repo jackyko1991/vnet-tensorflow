@@ -332,22 +332,34 @@ class image2label(object):
 
 				if pipeline_["preprocess"]["train"]["3D"] is not None:
 					for transform in pipeline_["preprocess"]["train"]["3D"]:
-						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						try:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						except:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])()
 						train_transforms_3d.append(tfm_cls)
 
 				if pipeline_["preprocess"]["train"]["2D"] is not None:
 					for transform in pipeline_["preprocess"]["train"]["2D"]:
-						tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
+						try:
+							tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
+						except:
+							tfm_cls = getattr(NiftiDataset2D,transform["name"])()
 						train_transforms_2d.append(tfm_cls)
 
 				if pipeline_["preprocess"]["test"]["3D"] is not None:
 					for transform in pipeline_["preprocess"]["test"]["3D"]:
-						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						try:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						except:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])()
 						test_transforms_3d.append(tfm_cls)
 
 				if pipeline_["preprocess"]["test"]["2D"] is not None:
 					for transform in pipeline_["preprocess"]["test"]["2D"]:
-						tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
+						try:
+							tfm_cls = getattr(NiftiDataset2D,transform["name"])(*[],**transform["variables"])
+						except:
+							tfm_cls = getattr(NiftiDataset2D,transform["name"])()
 						test_transforms_2d.append(tfm_cls)
 
 				trainTransforms = {"3D": train_transforms_3d, "2D": train_transforms_2d}
@@ -358,12 +370,18 @@ class image2label(object):
 
 				if pipeline_["preprocess"]["train"]["3D"] is not None:
 					for transform in pipeline_["preprocess"]["train"]["3D"]:
-						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						try:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						except KeyError:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])()
 						trainTransforms.append(tfm_cls)
 
 				if pipeline_["preprocess"]["test"]["3D"] is not None:
 					for transform in pipeline_["preprocess"]["test"]["3D"]:
-						tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						try:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])(*[],**transform["variables"])
+						except KeyError:
+							tfm_cls = getattr(NiftiDataset3D,transform["name"])()
 						testTransforms.append(tfm_cls)
 
 			# get input and output datasets

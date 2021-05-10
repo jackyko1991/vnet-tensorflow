@@ -1,5 +1,5 @@
 description: 3D segmentation pipeline
-disease: liver lesion
+disease: ICHn
 modality: CT
 preprocess:
   train: 
@@ -7,10 +7,10 @@ preprocess:
       - name: "ManualNormalization"
         variables: 
           windowMin: 0
-          windowMax: 600
+          windowMax: 80
       - name: "Resample"
         variables: 
-          voxel_size: [0.75, 0.75, 0.75]
+          voxel_size: [0.5, 0.5, 0.5]
       - name: "Padding"
         variables: 
           output_size: [256,256,32]
@@ -20,17 +20,16 @@ preprocess:
           rand_range: 32
           probability: 0.8
       - name: "RandomNoise"
-        variables:
 
   test:
     3D:
       - name: "ManualNormalization"
         variables: 
           windowMin: 0
-          windowMax: 600
+          windowMax: 80
       - name: "Resample"
         variables: 
-          voxel_size: [0.75, 0.75, 0.75]
+          voxel_size: [0.5, 0.5, 0.5]
       - name: "Padding"
         variables: 
           output_size: [256,256,32]
@@ -42,13 +41,13 @@ preprocess:
 
   evaluate:
     3D:
-       - name: "ManualNormalization"
+      - name: "ManualNormalization"
         variables: 
           windowMin: 0
-          windowMax: 600
+          windowMax: 80
       - name: "Resample"
         variables: 
-          voxel_size: [0.75, 0.75, 0.75]
+          voxel_size: [0.5, 0.5, 0.5]
       - name: "Padding"
         variables: 
           output_size: [256,256,32]
