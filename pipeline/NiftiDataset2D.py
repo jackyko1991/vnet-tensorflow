@@ -329,7 +329,11 @@ class NiftiDataset(object):
 			if sameSize and sameSpacing and sameDirection:
 				continue
 			else:
-				raise Exception('Header info inconsistent: {}'.format(source_paths[channel]))
+				raise Exception('Header info inconsistent: {}\nSame size: {}\nSame spacing: {}\nSame direction: {}'.
+					format(source_paths[channel],
+						sameSize,
+						sameSpacing,
+						sameDirection))
 				exit()
 
 		label = sitk.Image(images[0].GetSize(), sitk.sitkInt32)
