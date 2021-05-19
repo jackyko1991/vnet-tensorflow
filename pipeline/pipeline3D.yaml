@@ -1,5 +1,5 @@
 description: 3D segmentation pipeline
-disease: liver lesion
+disease: ICHn
 modality: CT
 preprocess:
   train: 
@@ -19,7 +19,6 @@ preprocess:
           rand_range: 32
           probability: 0.8
       - name: "RandomNoise"
-        variables:
 
   test:
     3D:

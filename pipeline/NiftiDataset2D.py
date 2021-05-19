@@ -114,7 +114,9 @@ class NiftiDataset(object):
 				statFilter = sitk.StatisticsImageFilter()
 				statFilter.Execute(label_)
 
-				if statFilter.GetSum() > 1:
+				if statFilter.GetSum() > self.min_pixel:
+					slices_list.append([case,i])
+				elif self.drop(self.drop_ratio):
 					slices_list.append([case,i])
 				else:
 					continue
@@ -146,8 +148,8 @@ class NiftiDataset(object):
 		self.data_size = len(slices_list)
 		return self.dataset
 
-	# def drop(self,probability):
-	# 	return random.random() <= probability
+	def drop(self,probability):
+		return random.random() <= probability
 
 	# def input_parser(self, case):
 	# 	# read image and select the desire slice
@@ -327,7 +329,11 @@ class NiftiDataset(object):
 			if sameSize and sameSpacing and sameDirection:
 				continue
 			else:
-				raise Exception('Header info inconsistent: {}'.format(source_paths[channel]))
+				raise Exception('Header info inconsistent: {}\nSame size: {}\nSame spacing: {}\nSame direction: {}'.
+					format(source_paths[channel],
+						sameSize,
+						sameSpacing,
+						sameDirection))
 				exit()
 
 		label = sitk.Image(images[0].GetSize(), sitk.sitkInt32)
