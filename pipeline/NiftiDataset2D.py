@@ -538,40 +538,8 @@ class RandomFlip(object):
 		images, label = sample['image'], sample['label']
 
 		dimension = 2
-		reference_origin = np.zeros(dimension)
-		reference_direction = np.identity(dimension).flatten()
-		reference_size = [128]*dimension 
-		reference_spacing = images[0].GetSpacing()
+		total_transform = sitk.CompositeTransform(sitk.AffineTransform(dimension))
 
-		# Another possibility is that you want isotropic pixels, then you can specify the image size for one of
-		# the axes and the others are determined by this choice. Below we choose to set the x axis to 128 and the
-		# spacing set accordingly. 
-		# Uncomment the following lines to use this strategy.
-		#reference_size_x = 128
-		#reference_spacing = [reference_physical_size[0]/(reference_size_x-1)]*dimension
-		#reference_size = [int(phys_sz/(spc) + 1) for phys_sz,spc in zip(reference_physical_size, reference_spacing)]
-
-		reference_image = sitk.Image(reference_size, images[0].GetPixelIDValue())
-		reference_image.SetOrigin(reference_origin)
-		reference_image.SetSpacing(reference_spacing)
-		reference_image.SetDirection(reference_direction)
-
-		# Always use the TransformContinuousIndexToPhysicalPoint to compute an indexed point's physical coordinates as 
-		# this takes into account size, spacing and direction cosines. For the vast majority of images the direction 
-		# cosines are the identity matrix, but when this isn't the case simply multiplying the central index by the 
-		# spacing will not yield the correct coordinates resulting in a long debugging session. 
-		reference_center = np.array(reference_image.TransformContinuousIndexToPhysicalPoint(np.array(reference_image.GetSize())/2.0))
-
-		transform = sitk.AffineTransform(dimension)
-		transform.SetMatrix(images[0].GetDirection())
-		transform.SetTranslation(np.array(images[0].GetOrigin()) - reference_origin)
-		centering_transform = sitk.TranslationTransform(dimension)
-		img_center = np.array(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
-		centering_transform.SetOffset(np.array(transform.GetInverse().TransformPoint(img_center) - reference_center))
-		centered_transform = sitk.CompositeTransform(transform)
-		centered_transform.AddTransform(centering_transform)
-
-		
 		flip_lr = random.choice([0, 1])
 		flip_ud = random.choice([0, 1])
 
@@ -579,22 +547,19 @@ class RandomFlip(object):
 			flipped_transform_lr = sitk.AffineTransform(dimension)    
 			flipped_transform_lr.SetCenter(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
 			flipped_transform_lr.SetMatrix([1,0,0,-1])
-			centered_transform.AddTransform(flipped_transform_lr)
+			total_transform.AddTransform(flipped_transform_lr)
 
 		if flip_ud:
 			flipped_transform_ud = sitk.AffineTransform(dimension)    
 			flipped_transform_ud.SetCenter(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
-			flipped_transform_ud.SetMatrix([-1,0,0,1])
-			centered_transform.AddTransform(flipped_transform_ud)
-
-		# inverse the centered translation
-		centered_transform.AddTransform(centered_transform.GetInverse())
+			flipped_transform_ud.SetMatrix([-1,0,0,-1])
+			total_transform.AddTransform(flipped_transform_ud)
 
 		if flip_lr or flip_ud:
 			for image_channel in range(len(images)):
-				images[image_channel] = sitk.Resample(images[image_channel], images[0], centered_transform, sitk.sitkLinear, 0.0)
+				images[image_channel] = sitk.Resample(images[image_channel], images[0], total_transform, sitk.sitkLinear, 0.0)
 
-				label = sitk.Resample(label, images[0], centered_transform, sitk.sitkNearestNeighbor, 0.0)
+			label = sitk.Resample(label, images[0], total_transform, sitk.sitkNearestNeighbor, 0.0)
 
 		return {'image': images, 'label': label}
 
@@ -610,53 +575,52 @@ class RandomRotate(object):
 		images, label = sample['image'], sample['label']
 
 		dimension = 2
-		reference_origin = np.zeros(dimension)
-		reference_direction = np.identity(dimension).flatten()
-		reference_size = [128]*dimension 
-		reference_spacing = images[0].GetSpacing()
-
-		reference_image = sitk.Image(reference_size, images[0].GetPixelIDValue())
-		reference_image.SetOrigin(reference_origin)
-		reference_image.SetSpacing(reference_spacing)
-		reference_image.SetDirection(reference_direction)
-
-		# Always use the TransformContinuousIndexToPhysicalPoint to compute an indexed point's physical coordinates as 
-		# this takes into account size, spacing and direction cosines. For the vast majority of images the direction 
-		# cosines are the identity matrix, but when this isn't the case simply multiplying the central index by the 
-		# spacing will not yield the correct coordinates resulting in a long debugging session. 
-		reference_center = np.array(reference_image.TransformContinuousIndexToPhysicalPoint(np.array(reference_image.GetSize())/2.0))
-
-		transform = sitk.AffineTransform(dimension)
-		transform.SetMatrix(images[0].GetDirection())
-		transform.SetTranslation(np.array(images[0].GetOrigin()) - reference_origin)
-		centering_transform = sitk.TranslationTransform(dimension)
-		img_center = np.array(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
-		centering_transform.SetOffset(np.array(transform.GetInverse().TransformPoint(img_center) - reference_center))
-		centered_transform = sitk.CompositeTransform(transform)
-		centered_transform.AddTransform(centering_transform)
+		total_transform = sitk.CompositeTransform(sitk.AffineTransform(dimension))
 
 		rotate_angle = random.randrange(-90,90,1)
 		rotate_angle = rotate_angle/180.*math.pi
-
 		rotate_transform = sitk.AffineTransform(dimension)    
 		rotate_transform.SetCenter(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
 		rotate_transform.SetMatrix([math.cos(rotate_angle),-math.sin(rotate_angle),math.sin(rotate_angle),math.cos(rotate_angle)])
 
-		centered_transform.AddTransform(rotate_transform)
-
-		# inverse the centered translation
-		centered_transform.AddTransform(centered_transform.GetInverse())
+		total_transform.AddTransform(rotate_transform)
 
 		for image_channel in range(len(images)):
-			images[image_channel] = sitk.Resample(images[image_channel], images[0], centered_transform, sitk.sitkLinear, 0.0)
+			images[image_channel] = sitk.Resample(images[image_channel], images[0], total_transform, sitk.sitkLinear, 0.0)
 
-		label = sitk.Resample(label, images[0], centered_transform, sitk.sitkNearestNeighbor, 0.0)
+		label = sitk.Resample(label, images[0], total_transform, sitk.sitkNearestNeighbor, 0.0)
+
+		return {'image': images, 'label': label}
+
+class RandomTranslate(object):
+	"""
+	Perfrom random translation about image center
+	"""
+
+	def __init__(self, maxOffset=[25,25]):
+		self.name = "RandomTranslate"
+		self.maxOffset = maxOffset
+
+	def __call__(self, sample):
+		images, label = sample['image'], sample['label']
+
+		dimension = 2
+		transform = sitk.TranslationTransform(dimension)
+		transform.SetOffset([
+			random.randrange(-1*self.maxOffset[0],self.maxOffset[0]),
+			random.randrange(-1*self.maxOffset[1],self.maxOffset[1]),
+			])
+
+		for image_channel in range(len(images)):
+			images[image_channel] = sitk.Resample(images[image_channel], images[0], transform, sitk.sitkLinear, 0.0)
+
+		label = sitk.Resample(label, images[0], transform, sitk.sitkNearestNeighbor, 0.0)
 
 		return {'image': images, 'label': label}
 
 class RadialDistortion(object):
 	"""
-	Perform radial distortion on 2D images
+	Perform radial distortion on 2D images, incomplete class
 	"""
 
 	def __init__(self):
