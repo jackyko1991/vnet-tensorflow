@@ -87,6 +87,9 @@ class NiftiDataset(object):
 			"@eaDir"
 		]
 
+		non_empty_slice_count = 0
+		empty_slice_count = 0
+
 		for case in pbar:
 			if case in ignore_files:
 				continue
@@ -116,10 +119,15 @@ class NiftiDataset(object):
 
 				if statFilter.GetSum() > self.min_pixel:
 					slices_list.append([case,i])
+					non_empty_slice_count += 1
 				elif self.drop(self.drop_ratio):
 					slices_list.append([case,i])
+					empty_slice_count += 1
 				else:
 					continue
+
+		print("Non empty slices: {}/{}".format(non_empty_slice_count,len(slices_list)))
+		print("Empty slices: {}/{}".format(empty_slice_count,len(slices_list)))
 
 		# randomize the slices
 		random.shuffle(slices_list)
@@ -150,157 +158,6 @@ class NiftiDataset(object):
 
 	def drop(self,probability):
 		return random.random() <= probability
-
-	# def input_parser(self, case):
-	# 	# read image and select the desire slice
-	# 	case = case.decode("utf-8")
-
-	# 	image_paths = []
-	# 	for channel in range(len(self.image_filenames)):
-	# 		image_paths.append(os.path.join(self.data_dir,case,self.image_filenames[channel]))
-
-	# 	# read images
-	# 	images = []
-	# 	for channel in range(len(image_paths)):
-	# 		images.append(self.read_image(image_paths[channel]))
-
-	# 	# cast image
-	# 	castImageFilter = sitk.CastImageFilter()
-	# 	castImageFilter.SetOutputPixelType(sitk.sitkFloat32)
-	# 	for channel in range(len(images)):
-	# 		images[channel] = castImageFilter.Execute(images[channel])
-	# 		# check header consistency
-	# 		sameSize = images[channel].GetSize() == images[0].GetSize()
-	# 		sameSpacing = images[channel].GetSpacing() == images[0].GetSpacing()
-	# 		sameDirection = images[channel].GetDirection() == images[0].GetDirection()
-
-	# 		if sameSize and sameSpacing and sameDirection:
-	# 			continue
-	# 		else:
-	# 			raise Exception('Header info inconsistent: {}'.format(source_paths[channel]))
-	# 			exit()
-
-	# 	label = sitk.Image(images[0].GetSize(), sitk.sitkUInt8)
-	# 	label.SetOrigin(images[0].GetOrigin())
-	# 	label.SetSpacing(images[0].GetSpacing())
-	# 	label.SetDirection(images[0].GetDirection())
-
-	# 	if self.train:
-	# 		label_ = self.read_image(os.path.join(self.data_dir, case, self.label_filename))
-
-	# 		# check header consistency
-	# 		sameSize = label_.GetSize() == images[0].GetSize()
-	# 		sameSpacing = label_.GetSpacing() == images[0].GetSpacing()
-	# 		sameDirection = label_.GetDirection() == images[0].GetDirection()
-	# 		if not (sameSize and sameSpacing and sameDirection):
-	# 			raise Exception('Header info inconsistent: {}'.format(os.path.join(self.data_dir,case, self.label_filename)))
-	# 			exit()
-
-	# 		thresholdFilter = sitk.BinaryThresholdImageFilter()
-	# 		thresholdFilter.SetOutsideValue(0)
-	# 		thresholdFilter.SetInsideValue(1)
-
-	# 		castImageFilter = sitk.CastImageFilter()
-	# 		castImageFilter.SetOutputPixelType(sitk.sitkUInt8)
-	# 		for channel in range(len(self.labels)):
-	# 			thresholdFilter.SetLowerThreshold(self.labels[channel])
-	# 			thresholdFilter.SetUpperThreshold(self.labels[channel])
-	# 			one_hot_label_image = thresholdFilter.Execute(label_)
-	# 			multiFilter = sitk.MultiplyImageFilter()
-	# 			one_hot_label_image = multiFilter.Execute(one_hot_label_image, channel)
-	# 			# cast one_hot_label to sitkUInt8
-	# 			one_hot_label_image = castImageFilter.Execute(one_hot_label_image)
-	# 			one_hot_label_image.SetSpacing(images[0].GetSpacing())
-	# 			one_hot_label_image.SetDirection(images[0].GetDirection())
-	# 			one_hot_label_image.SetOrigin(images[0].GetOrigin())
-	# 			addFilter = sitk.AddImageFilter()
-	# 			label = addFilter.Execute(label,one_hot_label_image)
-
-	# 	sample = {'image':images, 'label':label}
-
-	# 	if self.transforms3D:
-	# 		for transform in self.transforms3D:
-	# 			try:
-	# 				sample =transform(sample)
-	# 			except:
-	# 				print("Dataset preprocessing error: {}".format(os.path.dirname(image_paths[0])))
-	# 				exit()
-
-	# 	# extract the desire slice
-	# 	images = sample['image']
-	# 	label = sample['label']
-
-	# 	# check if the slice contains label
-	# 	contain_label = False
-
-	# 	extractor = sitk.ExtractImageFilter()
-	# 	size = [label.GetSize()[0],label.GetSize()[1],0]
-	# 	extractor.SetSize(size)
-		
-	# 	binaryThresholdFilter = sitk.BinaryThresholdImageFilter()
-	# 	binaryThresholdFilter.SetLowerThreshold(1)
-	# 	binaryThresholdFilter.SetUpperThreshold(255)
-	# 	binaryThresholdFilter.SetInsideValue(1)
-	# 	binaryThresholdFilter.SetOutsideValue(0)
-	# 	label_ = binaryThresholdFilter.Execute(label)
-
-	# 	labelShapeFilter = sitk.LabelShapeStatisticsImageFilter()
-	# 	labelShapeFilter.Execute(label_)
-	# 	bbox = labelShapeFilter.GetBoundingBox(1)
-
-	# 	statFilter = sitk.StatisticsImageFilter()
-	# 	statFilter.Execute(label_)
-	# 	if statFilter.GetSum() < self.min_pixel:
-	# 		contain_label = True
-	# 		slice_num = np.random.randint(0,label.GetSize()[2])
-	# 		index = [0,0,slice_num]
-	# 		extractor.SetIndex(index)
-
-	# 	while not contain_label: 
-	# 		slice_num = np.random.randint(bbox[2],bbox[2]+bbox[5])
-	# 		index = [0,0,slice_num]
-	# 		extractor.SetIndex(index)
-	# 		label_ = extractor.Execute(label)
-	# 		label_ = binaryThresholdFilter.Execute(label_)
-		
-	# 		statFilter.Execute(label_)
-
-	# 		# will iterate until a sub volume containing label is extracted
-	# 		# pixel_count = seg_crop.GetHeight()*seg_crop.GetWidth()*seg_crop.GetDepth()
-	# 		# if statFilter.GetSum()/pixel_count<self.min_ratio:
-	# 		if statFilter.GetSum()<self.min_pixel:
-	# 			contain_label = self.drop(self.drop_ratio) # has some probabilty to contain patch with empty label
-	# 		else:
-	# 			contain_label = True
-
-	# 	for channel in range(len(images)):
-	# 		images[channel] = extractor.Execute(images[channel])
-
-	# 	label = extractor.Execute(label)
-
-	# 	sample = {'image':images, 'label':label}
-
-	# 	if self.transforms2D:
-	# 		for transform in self.transforms2D:
-	# 			try:
-	# 				sample = transform(sample)
-	# 			except:
-	# 				print("Dataset preprocessing error: {}".format(os.path.dirname(image_paths[0])))
-	# 				exit()
-
-	# 	# convert sample to tf tensors
-	# 	for channel in range(len(sample['image'])):
-	# 		image_np_ = sitk.GetArrayFromImage(sample['image'][channel])
-	# 		image_np_ = np.asarray(image_np_,np.float32)
-	# 		if channel == 0:
-	# 			image_np = image_np_[:,:,np.newaxis]
-	# 		else:
-	# 			image_np = np.append(image_np,image_np_[:,:,np.newaxis],axis=-1)
-
-	# 	label_np = sitk.GetArrayFromImage(sample['label'])
-	# 	label_np = np.asarray(label_np,np.int32)
-
-	# 	return image_np, label_np
 
 	def input_parser(self, case, slice_num):
 		# read image and select the desire slice
@@ -349,7 +206,11 @@ class NiftiDataset(object):
 			sameSpacing = label_.GetSpacing() == images[0].GetSpacing()
 			sameDirection = label_.GetDirection() == images[0].GetDirection()
 			if not (sameSize and sameSpacing and sameDirection):
-				raise Exception('Header info inconsistent: {}'.format(os.path.join(self.data_dir,case, self.label_filename)))
+				raise Exception('Header info inconsistent: {}\nSame size: {}\nSame spacing: {}\nSame direction: {}'.
+					format(os.path.join(self.data_dir,case, self.label_filename),
+						sameSize,
+						sameSpacing,
+						sameDirection))
 				exit()
 
 			for channel in range(len(self.labels)):
@@ -664,3 +525,142 @@ class RandomCrop(object):
 
 	def drop(self,probability):
 		return random.random() <= probability
+
+class RandomFlip(object):
+	"""
+	Randomly flip the 2D image
+	"""
+
+	def __init__(self):
+		self.name = "RandomFlip"
+
+	def __call__(self, sample):
+		images, label = sample['image'], sample['label']
+
+		dimension = 2
+		reference_origin = np.zeros(dimension)
+		reference_direction = np.identity(dimension).flatten()
+		reference_size = [128]*dimension 
+		reference_spacing = images[0].GetSpacing()
+
+		# Another possibility is that you want isotropic pixels, then you can specify the image size for one of
+		# the axes and the others are determined by this choice. Below we choose to set the x axis to 128 and the
+		# spacing set accordingly. 
+		# Uncomment the following lines to use this strategy.
+		#reference_size_x = 128
+		#reference_spacing = [reference_physical_size[0]/(reference_size_x-1)]*dimension
+		#reference_size = [int(phys_sz/(spc) + 1) for phys_sz,spc in zip(reference_physical_size, reference_spacing)]
+
+		reference_image = sitk.Image(reference_size, images[0].GetPixelIDValue())
+		reference_image.SetOrigin(reference_origin)
+		reference_image.SetSpacing(reference_spacing)
+		reference_image.SetDirection(reference_direction)
+
+		# Always use the TransformContinuousIndexToPhysicalPoint to compute an indexed point's physical coordinates as 
+		# this takes into account size, spacing and direction cosines. For the vast majority of images the direction 
+		# cosines are the identity matrix, but when this isn't the case simply multiplying the central index by the 
+		# spacing will not yield the correct coordinates resulting in a long debugging session. 
+		reference_center = np.array(reference_image.TransformContinuousIndexToPhysicalPoint(np.array(reference_image.GetSize())/2.0))
+
+		transform = sitk.AffineTransform(dimension)
+		transform.SetMatrix(images[0].GetDirection())
+		transform.SetTranslation(np.array(images[0].GetOrigin()) - reference_origin)
+		centering_transform = sitk.TranslationTransform(dimension)
+		img_center = np.array(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
+		centering_transform.SetOffset(np.array(transform.GetInverse().TransformPoint(img_center) - reference_center))
+		centered_transform = sitk.CompositeTransform(transform)
+		centered_transform.AddTransform(centering_transform)
+
+		
+		flip_lr = random.choice([0, 1])
+		flip_ud = random.choice([0, 1])
+
+		if flip_lr:
+			flipped_transform_lr = sitk.AffineTransform(dimension)    
+			flipped_transform_lr.SetCenter(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
+			flipped_transform_lr.SetMatrix([1,0,0,-1])
+			centered_transform.AddTransform(flipped_transform_lr)
+
+		if flip_ud:
+			flipped_transform_ud = sitk.AffineTransform(dimension)    
+			flipped_transform_ud.SetCenter(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
+			flipped_transform_ud.SetMatrix([-1,0,0,1])
+			centered_transform.AddTransform(flipped_transform_ud)
+
+		# inverse the centered translation
+		centered_transform.AddTransform(centered_transform.GetInverse())
+
+		if flip_lr or flip_ud:
+			for image_channel in range(len(images)):
+				images[image_channel] = sitk.Resample(images[image_channel], images[0], centered_transform, sitk.sitkLinear, 0.0)
+
+				label = sitk.Resample(label, images[0], centered_transform, sitk.sitkNearestNeighbor, 0.0)
+
+		return {'image': images, 'label': label}
+
+class RandomRotate(object):
+	"""
+	Randomly rotate the 2D image about center
+	"""
+
+	def __init__(self):
+		self.name = "RandomRotate"
+
+	def __call__(self, sample):
+		images, label = sample['image'], sample['label']
+
+		dimension = 2
+		reference_origin = np.zeros(dimension)
+		reference_direction = np.identity(dimension).flatten()
+		reference_size = [128]*dimension 
+		reference_spacing = images[0].GetSpacing()
+
+		reference_image = sitk.Image(reference_size, images[0].GetPixelIDValue())
+		reference_image.SetOrigin(reference_origin)
+		reference_image.SetSpacing(reference_spacing)
+		reference_image.SetDirection(reference_direction)
+
+		# Always use the TransformContinuousIndexToPhysicalPoint to compute an indexed point's physical coordinates as 
+		# this takes into account size, spacing and direction cosines. For the vast majority of images the direction 
+		# cosines are the identity matrix, but when this isn't the case simply multiplying the central index by the 
+		# spacing will not yield the correct coordinates resulting in a long debugging session. 
+		reference_center = np.array(reference_image.TransformContinuousIndexToPhysicalPoint(np.array(reference_image.GetSize())/2.0))
+
+		transform = sitk.AffineTransform(dimension)
+		transform.SetMatrix(images[0].GetDirection())
+		transform.SetTranslation(np.array(images[0].GetOrigin()) - reference_origin)
+		centering_transform = sitk.TranslationTransform(dimension)
+		img_center = np.array(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
+		centering_transform.SetOffset(np.array(transform.GetInverse().TransformPoint(img_center) - reference_center))
+		centered_transform = sitk.CompositeTransform(transform)
+		centered_transform.AddTransform(centering_transform)
+
+		rotate_angle = random.randrange(-90,90,1)
+		rotate_angle = rotate_angle/180.*math.pi
+
+		rotate_transform = sitk.AffineTransform(dimension)    
+		rotate_transform.SetCenter(images[0].TransformContinuousIndexToPhysicalPoint(np.array(images[0].GetSize())/2.0))
+		rotate_transform.SetMatrix([math.cos(rotate_angle),-math.sin(rotate_angle),math.sin(rotate_angle),math.cos(rotate_angle)])
+
+		centered_transform.AddTransform(rotate_transform)
+
+		# inverse the centered translation
+		centered_transform.AddTransform(centered_transform.GetInverse())
+
+		for image_channel in range(len(images)):
+			images[image_channel] = sitk.Resample(images[image_channel], images[0], centered_transform, sitk.sitkLinear, 0.0)
+
+		label = sitk.Resample(label, images[0], centered_transform, sitk.sitkNearestNeighbor, 0.0)
+
+		return {'image': images, 'label': label}
+
+class RadialDistortion(object):
+	"""
+	Perform radial distortion on 2D images
+	"""
+
+	def __init__(self):
+		self.name = "RadialDistortion"
+
+	def __call__(self, sample):
+		images, label = sample['image'], sample['label'] 

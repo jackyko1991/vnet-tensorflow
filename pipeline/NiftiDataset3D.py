@@ -101,7 +101,12 @@ class NiftiDataset(object):
 			sameSpacing = label_.GetSpacing() == images[0].GetSpacing()
 			sameDirection = label_.GetDirection() == images[0].GetDirection()
 			if not (sameSize and sameSpacing and sameDirection):
-				raise Exception('Header info inconsistent: {}'.format(os.path.join(self.data_dir,case, self.label_filename)))
+				raise Exception('Header info inconsistent: {}\nSame size: {}\nSame spacing: {}\nSame direction: {}'.
+					format(os.path.join(self.data_dir,case, self.label_filename),
+						sameSize,
+						sameSpacing,
+						sameDirection
+						))
 				exit()
 
 			thresholdFilter = sitk.BinaryThresholdImageFilter()
