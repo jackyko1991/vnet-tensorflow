@@ -295,7 +295,7 @@ class ManualNormalization(object):
 	"""
 
 	def __init__(self,windowMin, windowMax):
-		self.name = 'ManualNormalization'
+		self.name = 'Manual Normalization'
 		assert isinstance(windowMax, (int,float))
 		assert isinstance(windowMin, (int,float))
 		self.windowMax = float(windowMax)
@@ -532,7 +532,7 @@ class RandomFlip(object):
 	"""
 
 	def __init__(self):
-		self.name = "RandomFlip"
+		self.name = "Random Flip"
 
 	def __call__(self, sample):
 		images, label = sample['image'], sample['label']
@@ -569,7 +569,7 @@ class RandomRotate(object):
 	"""
 
 	def __init__(self):
-		self.name = "RandomRotate"
+		self.name = "Random Rotate"
 
 	def __call__(self, sample):
 		images, label = sample['image'], sample['label']
@@ -598,7 +598,7 @@ class RandomTranslate(object):
 	"""
 
 	def __init__(self, maxOffset=[25,25]):
-		self.name = "RandomTranslate"
+		self.name = "Random Translate"
 		self.maxOffset = maxOffset
 
 	def __call__(self, sample):
@@ -624,7 +624,7 @@ class RadialDistortion(object):
 	"""
 
 	def __init__(self):
-		self.name = "RadialDistortion"
+		self.name = "Radial Distortion"
 
 	def __call__(self, sample):
 		images, label = sample['image'], sample['label'] 

@@ -531,13 +531,14 @@ class RandomNoise(object):
 	"""
 	Randomly noise to the image in a sample. This is usually used for data augmentation.
 	"""
-	def __init__(self):
+	def __init__(self,sigma=5):
 		self.name = 'Random Noise'
+		self.sigma = sigma
 
 	def __call__(self, sample):
 		self.noiseFilter = sitk.AdditiveGaussianNoiseImageFilter()
 		self.noiseFilter.SetMean(0)
-		self.noiseFilter.SetStandardDeviation(0.1)
+		self.noiseFilter.SetStandardDeviation(self.sigma)
 
 		# print("Normalizing image...")
 		image, label = sample['image'], sample['label']
