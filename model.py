@@ -519,13 +519,17 @@ class image2label(object):
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen',axis=(1,2))
 				else:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen')
-				self.loss_op = (1. - sorensen)  + self.loss_alpha*xent
+				tf.summary.scalar('1.dice', (1. - sorensen))
+				tf.summary.scalar('2.regularized_xent', self.loss_alpha*xent)
+				self.loss_op = (1. - sorensen) + self.loss_alpha*xent
 			elif (self.loss_name == "mixed_weighted_sorensen"):
 				xent = weighted_softmax_cross_entropy_with_logits(labels,self.logits,self.loss_weights)
 				if self.dimension == 2:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weights=self.loss_weights)
 				else:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weights=self.loss_weights)
+				tf.summary.scalar('1.dice', (1. - sorensen))
+				tf.summary.scalar('2.regularized_xent', self.loss_alpha*xent)
 				self.loss_op = (1. - sorensen) + self.loss_alpha*xent
 			elif (self.loss_name == "mixed_jaccard"):
 				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
@@ -533,6 +537,8 @@ class image2label(object):
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2))
 				else:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
+				tf.summary.scalar('1.dice', (1. - jaccard))
+				tf.summary.scalar('2.regularized_xent', self.loss_alpha*xent)
 				self.loss_op = (1. - jaccard) + self.loss_alpha*xent
 			elif (self.loss_name == "mixed_weighted_jaccard"):
 				xent = weighted_softmax_cross_entropy_with_logits(labels,self.logits,self.loss_weights)
@@ -540,11 +546,13 @@ class image2label(object):
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weights=self.loss_weights)
 				else:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weights=self.loss_weights)
+				tf.summary.scalar('1.dice', (1. - jaccard))
+				tf.summary.scalar('2.regularized_xent', self.loss_alpha*xent)
 				self.loss_op = (1. - jaccard) + self.loss_alpha*xent
 			else:
 				sys.exit("Invalid loss function")
 
-		tf.summary.scalar('loss', self.loss_op)
+			tf.summary.scalar('0.total_loss', self.loss_op)
 
 		print("{}: Loss function complete".format(datetime.datetime.now()))
 
