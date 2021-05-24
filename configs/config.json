@@ -27,7 +27,8 @@
         },
         "Loss": {
             "Name": "weighted_sorensen",
-            "Weights": [0.01,0.1,1] 
+            "Weights": [0.01,0.1,1],
+            "Alpha": 1
         },
         "Optimizer":{
             "Name": "Adam",

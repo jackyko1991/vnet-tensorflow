@@ -83,6 +83,13 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weights=[], sm
 
 	return dice
 
+def weighted_softmax_cross_entropy_with_logits(labels,logits, weights):
+	class_weights = tf.constant([weights])
+	weights = tf.reduce_sum(class_weights * labels, axis=-1)
+	unweighted_losses = tf.nn.softmax_cross_entropy_with_logits(labels=labels, logits=logits)
+	weighted_losses = unweighted_losses * weights
+	return tf.reduce_mean(weighted_losses)
+
 def prepare_batch(image_ijk_patch_indices_dict):
 	# image_batches = []
 	# for batch in ijk_patch_indices:
@@ -212,6 +219,7 @@ class image2label(object):
 
 		self.loss_name = self.config['TrainingSetting']['Loss']['Name']
 		self.loss_weights = self.config['TrainingSetting']['Loss']['Weights']
+		self.loss_alpha = self.config['TrainingSetting']['Loss']['Alpha']
 		self.training_pipeline = self.config['TrainingSetting']['Pipeline']
 
 		# evaluation config
@@ -480,7 +488,7 @@ class image2label(object):
 			if (self.loss_name == "xent"):
 				self.loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
 			if (self.loss_name == "weighted_xent"):
-				self.loss_op = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(labels=labels,logits=self.logits,pos_weight=self.loss_weights))
+				self.loss_op = weighted_softmax_cross_entropy_with_logits(labels,self.logits,self.loss_weights)
 			elif (self.loss_name == "sorensen"):
 				if self.dimension == 2:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen',axis=(1,2))
@@ -511,30 +519,28 @@ class image2label(object):
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen',axis=(1,2))
 				else:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen')
-				self.loss_op = (1. - sorensen) + xent
+				self.loss_op = (1. - sorensen)  + self.loss_alpha*xent
 			elif (self.loss_name == "mixed_weighted_sorensen"):
-				# xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
-				xent = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(labels=labels,logits=self.logits,pos_weight=self.loss_weights))
+				xent = weighted_softmax_cross_entropy_with_logits(labels,self.logits,self.loss_weights)
 				if self.dimension == 2:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weights=self.loss_weights)
 				else:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weights=self.loss_weights)
-				self.loss_op = (1. - sorensen) + xent
+				self.loss_op = (1. - sorensen) + self.loss_alpha*xent
 			elif (self.loss_name == "mixed_jaccard"):
 				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
 				if self.dimension == 2:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2))
 				else:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
-				self.loss_op = (1. - jaccard) + xent
+				self.loss_op = (1. - jaccard) + self.loss_alpha*xent
 			elif (self.loss_name == "mixed_weighted_jaccard"):
-				# xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
-				xent = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(labels=labels,logits=self.logits,pos_weight=self.loss_weights))
+				xent = weighted_softmax_cross_entropy_with_logits(labels,self.logits,self.loss_weights)
 				if self.dimension == 2:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weights=self.loss_weights)
 				else:
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weights=self.loss_weights)
-				self.loss_op = (1. - jaccard) + xent
+				self.loss_op = (1. - jaccard) + self.loss_alpha*xent
 			else:
 				sys.exit("Invalid loss function")
 
