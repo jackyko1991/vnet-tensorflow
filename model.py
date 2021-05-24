@@ -22,7 +22,7 @@ def grayscale_to_rainbow(image):
 
 	return RGB
 
-def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weighted=False, smooth=1e-5):
+def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weights=[], smooth=1e-5):
 	"""Soft dice (Sørensen or Jaccard) coefficient for comparing the similarity
 	of two batch of data, usually be used for binary image segmentation
 	i.e. labels are binary. The coefficient between 0 to 1, 1 means totally match.
@@ -37,8 +37,8 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weighted=False
 		``jaccard`` or ``sorensen``, default is ``jaccard``.
 	axis : tuple of int
 		All dimensions are reduced, default ``[1,2,3]``.
-	weight : bool
-		Boolean option for generalized dice loss
+	weight : list of float
+		List of 1D batch-sized float-Tensors of the same length as chanel number.
 	smooth : float
 		This small value will be added to the numerator and denominator.
 			- If both output and target are empty, it makes sure dice is 1.
@@ -66,10 +66,11 @@ def dice_coe(output, target, loss_type='jaccard', axis=(1, 2, 3), weighted=False
 	else:
 		raise Exception("Unknown loss_type")
 
-	if weighted:
+	if weights != []:
+		assert len(weights) == target.get_shape()[-1], "Length of DICE weight is {}, should be {}".format(len(weights),target.get_shape()[-1])
+		weights = tf.cast(weights,tf.float32)
 		w = 1./(tf.reduce_sum(target*target, axis=axis) + smooth)
-		# w = tf.clip_by_value(w, 1e-17, 1.0 - 1e-7)
-		dice = tf.reduce_sum(2.* w * inse +smooth, axis=-1)/tf.reduce_sum(w*(l + r) + smooth,axis=-1)
+		dice = tf.reduce_sum(2.* weights * inse + smooth, axis=-1)/tf.reduce_sum(weights*(l + r) + smooth,axis=-1)
 		dice = tf.reduce_mean(dice, name='dice_coe')
 	else:
 		# old axis=[0,1,2,3]
@@ -209,7 +210,8 @@ class image2label(object):
 		self.drop_ratio = self.config['TrainingSetting']['DropRatio']
 		self.min_pixel = self.config['TrainingSetting']['MinPixel']
 
-		self.loss_name = self.config['TrainingSetting']['Loss']
+		self.loss_name = self.config['TrainingSetting']['Loss']['Name']
+		self.loss_weights = self.config['TrainingSetting']['Loss']['Weights']
 		self.training_pipeline = self.config['TrainingSetting']['Pipeline']
 
 		# evaluation config
@@ -477,6 +479,8 @@ class image2label(object):
 
 			if (self.loss_name == "xent"):
 				self.loss_op = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+			if (self.loss_name == "weighted_xent"):
+				self.loss_op = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(labels=labels,logits=self.logits,pos_weight=self.loss_weights))
 			elif (self.loss_name == "sorensen"):
 				if self.dimension == 2:
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen',axis=(1,2))
@@ -485,9 +489,9 @@ class image2label(object):
 				self.loss_op = 1. - sorensen
 			elif (self.loss_name == "weighted_sorensen"):
 				if self.dimension == 2:
-					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weighted=True)
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weights=self.loss_weights)
 				else:
-					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weighted=True)
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weights=self.loss_weights)
 				self.loss_op = 1. - sorensen
 			elif (self.loss_name == "jaccard"):
 				if self.dimension == 2:
@@ -497,9 +501,9 @@ class image2label(object):
 				self.loss_op = 1. - jaccard
 			elif (self.loss_name == "weighted_jaccard"):
 				if self.dimension == 2:
-					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weighted=True)
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weights=self.loss_weights)
 				else:
-					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weighted=True)
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weights=self.loss_weights)
 				self.loss_op = 1. - jaccard
 			elif (self.loss_name == "mixed_sorensen"):
 				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
@@ -509,11 +513,12 @@ class image2label(object):
 					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen')
 				self.loss_op = (1. - sorensen) + xent
 			elif (self.loss_name == "mixed_weighted_sorensen"):
-				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				# xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				xent = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(labels=labels,logits=self.logits,pos_weight=self.loss_weights))
 				if self.dimension == 2:
-					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weighted=True)
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', axis=(1,2), weights=self.loss_weights)
 				else:
-					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weighted=True)
+					sorensen = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='sorensen', weights=self.loss_weights)
 				self.loss_op = (1. - sorensen) + xent
 			elif (self.loss_name == "mixed_jaccard"):
 				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
@@ -523,11 +528,12 @@ class image2label(object):
 					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard')
 				self.loss_op = (1. - jaccard) + xent
 			elif (self.loss_name == "mixed_weighted_jaccard"):
-				xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				# xent = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels,logits=self.logits))
+				xent = tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(labels=labels,logits=self.logits,pos_weight=self.loss_weights))
 				if self.dimension == 2:
-					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weighted=True)
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard',axis=(1,2), weights=self.loss_weights)
 				else:
-					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weighted=True)
+					jaccard = dice_coe(softmax,tf.cast(labels,dtype=tf.float32), loss_type='jaccard', weights=self.loss_weights)
 				self.loss_op = (1. - jaccard) + xent
 			else:
 				sys.exit("Invalid loss function")
