@@ -107,17 +107,22 @@ class NiftiDataset(object):
 				extractor.SetIndex(index)
 				label_ = extractor.Execute(label)
 
-				binaryThresholdFilter = sitk.BinaryThresholdImageFilter()
-				binaryThresholdFilter.SetLowerThreshold(1)
-				binaryThresholdFilter.SetUpperThreshold(255)
-				binaryThresholdFilter.SetInsideValue(1)
-				binaryThresholdFilter.SetOutsideValue(0)
-				label_ = binaryThresholdFilter.Execute(label_)
+				# count on smallest label
+				labelStatFilter = sitk.LabelStatisticsImageFilter()
+				labelStatFilter.Execute(label_,label_)
 
-				statFilter = sitk.StatisticsImageFilter()
-				statFilter.Execute(label_)
+				min_pixel = 99999999999
 
-				if statFilter.GetSum() > self.min_pixel:
+				for label_num in self.labels:
+					if label_num == 0:
+						continue
+					if labelStatFilter.HasLabel(label_num):
+						if labelStatFilter.GetCount(label_num) < min_pixel:
+							min_pixel = labelStatFilter.GetCount(label_num)
+					else:
+						min_pixel = 0
+
+				if min_pixel > self.min_pixel:
 					slices_list.append([case,i])
 					non_empty_slice_count += 1
 				elif self.drop(self.drop_ratio):
