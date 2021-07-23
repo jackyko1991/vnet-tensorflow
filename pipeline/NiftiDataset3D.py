@@ -13,11 +13,10 @@ class NiftiDataset(object):
 	Currently only support linear interpolation method
 	Args:
 		data_dir (string): Path to data directory.
-
-	image_filename (string): Filename of image data.
-	label_filename (string): Filename of label data.
-	transforms (list): List of SimpleITK image transformations.
-	train (bool): Determine whether the dataset class run in training/inference mode. When set to false, an empty label with same metadata as image is generated.
+		image_filename (string): Filename of image data.
+		label_filename (string): Filename of label data.
+		transforms (list): List of SimpleITK image transformations.
+		train (bool): Determine whether the dataset class run in training/inference mode. When set to false, an empty label with same metadata as image is generated.
 	"""
 
 	def __init__(self,
@@ -194,6 +193,10 @@ class RandomFlip(object):
 class StatisticalNormalization(object):
 	"""
 	Normalize an image by mapping intensity with intensity distribution
+	
+	Args:
+		sigma (float): standard deviation/ percentile of intensity value to be excluded
+		pre_norm (bool): perform initial normalize of the input image by setting its mean to zero and variance to one
 	"""
 
 	def __init__(self, sigma, pre_norm=False):
@@ -216,8 +219,8 @@ class StatisticalNormalization(object):
 			intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
 			intensityWindowingFilter.SetOutputMaximum(255)
 			intensityWindowingFilter.SetOutputMinimum(0)
-			intensityWindowingFilter.SetWindowMaximum(statisticsFilter.GetMean()+self.sigma*statisticsFilter.GetSigma());
-			intensityWindowingFilter.SetWindowMinimum(statisticsFilter.GetMean()-self.sigma*statisticsFilter.GetSigma());
+			intensityWindowingFilter.SetWindowMaximum(statisticsFilter.GetMean()+self.sigma*statisticsFilter.GetSigma())
+			intensityWindowingFilter.SetWindowMinimum(statisticsFilter.GetMean()-self.sigma*statisticsFilter.GetSigma())
 
 			image[image_channel] = intensityWindowingFilter.Execute(image[image_channel])
 
@@ -432,7 +435,7 @@ class RandomCrop(object):
 	This transformation only applicable in train mode
 
 	Args:
-	output_size (tuple or int): Desired output size. If int, cubic crop is made.
+		output_size (tuple or int): Desired output size. If int, cubic crop is made.
 	"""
 
 	def __init__(self, output_size, drop_ratio=0.1, min_pixel=1):
@@ -550,8 +553,8 @@ class ConfidenceCrop(object):
 	A higher sigma value will provide a higher offset
 
 	Args:
-	output_size (tuple or int): Desired output size. If int, cubic crop is made.
-	sigma (float): Normalized standard deviation value.
+		output_size (tuple or int): Desired output size. If int, cubic crop is made.
+		sigma (float): Normalized standard deviation value.
 	"""
 
 	def __init__(self, output_size, sigma=2.5):
@@ -633,9 +636,9 @@ class ConfidenceCrop2(object):
 	Regions containing label is considered to be positive while regions without label is negative. This distribution is governed by the user defined probability
 
 	Args:
-	output_size (tuple or int): Desired output size. If int, cubic crop is made.
-	range (int): Bounding box random offset max value
-	probability (float): Probability to get positive labels
+		output_size (tuple or int): Desired output size. If int, cubic crop is made.
+		range (int): Bounding box random offset max value
+		probability (float): Probability to get positive labels
 	"""
 
 	def __init__(self, output_size, rand_range=3,probability=0.5, random_empty_region=False):
