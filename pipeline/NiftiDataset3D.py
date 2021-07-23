@@ -80,7 +80,11 @@ class NiftiDataset(object):
 			if sameSize and sameSpacing and sameDirection:
 				continue
 			else:
-				raise Exception('Header info inconsistent: {}'.format(image_paths[channel]))
+				raise Exception('Header info inconsistent: {}\nSame size: {}\nSame spacing: {}\nSame direction: {}'.
+					format(source_paths[channel],
+						sameSize,
+						sameSpacing,
+						sameDirection))
 				exit()
 
 		label = sitk.Image(images[0].GetSize(),sitk.sitkUInt8)
@@ -96,7 +100,12 @@ class NiftiDataset(object):
 			sameSpacing = label_.GetSpacing() == images[0].GetSpacing()
 			sameDirection = label_.GetDirection() == images[0].GetDirection()
 			if not (sameSize and sameSpacing and sameDirection):
-				raise Exception('Header info inconsistent: {}'.format(os.path.join(self.data_dir,case, self.label_filename)))
+				raise Exception('Header info inconsistent: {}\nSame size: {}\nSame spacing: {}\nSame direction: {}'.
+					format(os.path.join(self.data_dir,case, self.label_filename),
+						sameSize,
+						sameSpacing,
+						sameDirection
+						))
 				exit()
 
 			thresholdFilter = sitk.BinaryThresholdImageFilter()
@@ -525,13 +534,14 @@ class RandomNoise(object):
 	"""
 	Randomly noise to the image in a sample. This is usually used for data augmentation.
 	"""
-	def __init__(self):
+	def __init__(self,sigma=5):
 		self.name = 'Random Noise'
+		self.sigma = sigma
 
 	def __call__(self, sample):
 		self.noiseFilter = sitk.AdditiveGaussianNoiseImageFilter()
 		self.noiseFilter.SetMean(0)
-		self.noiseFilter.SetStandardDeviation(0.1)
+		self.noiseFilter.SetStandardDeviation(self.sigma)
 
 		# print("Normalizing image...")
 		image, label = sample['image'], sample['label']

@@ -1,54 +1,50 @@
 description: 3D segmentation pipeline
-disease: liver lesion
+disease: ICHn
 modality: CT
 preprocess:
   train: 
     3D:
-      - name: "ManualNormalization"
+      - name: "StatisticalNormalization"
         variables: 
-          windowMin: 0
-          windowMax: 600
+          sigma: 2.5
       - name: "Resample"
         variables: 
-          voxel_size: [0.75, 0.75, 0.75]
+          voxel_size: [0.25, 0.25, 0.25]
       - name: "Padding"
         variables: 
-          output_size: [256,256,32]
+          output_size: [128,128,128]
       - name: "ConfidenceCrop2"
         variables: 
-          output_size: [256,256,32]
+          output_size: [128,128,128]
           rand_range: 32
           probability: 0.8
       - name: "RandomNoise"
-        variables:
 
   test:
     3D:
-      - name: "ManualNormalization"
+      - name: "StatisticalNormalization"
         variables: 
-          windowMin: 0
-          windowMax: 600
+          sigma: 2.5
       - name: "Resample"
         variables: 
-          voxel_size: [0.75, 0.75, 0.75]
+          voxel_size: [0.25, 0.25, 0.25]
       - name: "Padding"
         variables: 
-          output_size: [256,256,32]
+          output_size: [128,128,128]
       - name: "ConfidenceCrop2"
         variables: 
-          output_size: [256,256,32]
+          output_size: [128,128,128]
           rand_range: 32
           probability: 0.8
 
   evaluate:
     3D:
-       - name: "ManualNormalization"
+      - name: "StatisticalNormalization"
         variables: 
-          windowMin: 0
-          windowMax: 600
+          sigma: 2.5
       - name: "Resample"
         variables: 
-          voxel_size: [0.75, 0.75, 0.75]
+          voxel_size: [0.25, 0.25, 0.25]
       - name: "Padding"
         variables: 
-          output_size: [256,256,32]
+          output_size: [128,128,128]

@@ -27,7 +27,11 @@
             "Name":"VNet",
             "Dropout": 0.01
         },
-        "Loss": "sorensen",
+        "Loss": {
+            "Name": "weighted_sorensen",
+            "Weights": [0.01,0.1,1] ,
+            "Alpha": 1
+        },
         "Optimizer":{
             "Name": "Adam",
             "InitialLearningRate": 1e-2,
