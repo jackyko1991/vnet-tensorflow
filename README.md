@@ -12,7 +12,8 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [Features](#features)
 - [Development Progress](#development-progress)
 - [Usage](#usage)
-  - [Required Libraries](#required-libraries)
+  - [Native Python Runtime](#native-python-runtime)
+  - [Docker Container](#docker-container)
   - [Folder Hierarchy](#folder-hierarchy)
   - [Training](#training)
     - [Image Batch Preparation](#image-batch-preparation)
@@ -85,7 +86,7 @@ LOG_DIR=<log-dir>
 CKPT_DIR=<ckpt-dir>
 
 # run docker image
-docker run -u $(id -u):$(id -g) --rm -p 6006:6006/tcp -v $DATA_DIR:/app/data -v $CONFIG_JSON:/app/configs -v $PIPELINE:/app/configs -v $LOG_DIR:/app/log -v $CKPT_DIR:/app/ckpt -it --entrypoint /bin/bash vnet-tensorflow:latest
+docker run -u $(id -u):$(id -g) --rm -p 6006:6006/tcp -v $DATA_DIR:/app/data -v $CONFIG_JSON:/app/configs -v $PIPELINE:/app/configs -v $LOG_DIR:/app/log -v $CKPT_DIR:/app/ckpt -it --entrypoint /bin/bash jackyko1991/vnet-tensorflow:latest
 
 # run training command
 python main.py -p train --config_json /app/configs/config_docker.json
@@ -98,7 +99,7 @@ Container port 6006 is exposed for Tensorboard. If you wish to start Tensorboard
 LOG_DIR=<log-dir>
 
 # run docker image
-docker run -u $(id -u):$(id -g) --rm -p 6006:6006/tcp -v $LOG_DIR:/app/log-it --entrypoint /bin/bash vnet-tensorflow:latest
+docker run -u $(id -u):$(id -g) --rm -p 6006:6006/tcp -v $LOG_DIR:/app/log-it --entrypoint /bin/bash jackyko1991/vnet-tensorflow:latest
 
 # run tensorboard
 tensorboard --logdir /app/log
