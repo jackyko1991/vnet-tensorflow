@@ -48,11 +48,28 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [ ] Hyperparameter tuning
 
 ## Usage
-### Required Libraries
-Known good dependencies
-- Python 3.7
-- Tensorflow 1.14 or above
-- SimpleITK
+### Native Python Runtime
+Tensorflow 1 is no longer supported officially by Google. If you wish to go for native run check the installation instruction given by [Nvidia-tensorflow](https://github.com/NVIDIA/tensorflow).
+
+We recommend [Mambaforge](https://github.com/conda-forge/miniforge#mambaforge) for native python environment control as a faster replacement of Anaconda. Make sure you have install the Nvidia driver and accessible to GPU beforehand.
+
+Quick checklist for the GPU versions:
+- Ubuntu 20.04 or later (64-bit)
+- Python 3.8
+- Nvidia-Tensorflow 1.15.5
+- CUDA 10.0
+
+```bash
+mamba create -n vnet-tensorflow python=3.8 -y
+mamba activate vnet-tensorflow
+
+git clone git@github.com:jackyko1991/vnet-tensorflow.git
+cd vnet-tensorflow
+pip install -r requirements.txt
+```
+
+### Docker Container
+For the obsoleted development of TF1 and messy CUDA configuration, we provide the docker image for quick environment setting.
 
 ### Folder Hierarchy
 All training, testing and evaluation data should put in `./data`
