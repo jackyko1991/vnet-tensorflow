@@ -1,5 +1,4 @@
-nvidia-pyindex
-nvidia-tensorflow[horovod]
 SimpleITK
 tqdm
 protobuf==3.19.6
+PyYAML

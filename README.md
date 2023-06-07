@@ -62,6 +62,8 @@ Quick checklist for the GPU versions:
 ```bash
 mamba create -n vnet-tensorflow python=3.8 -y
 mamba activate vnet-tensorflow
+pip install --user nvidia-pyindex
+pip install --user nvidia-tensorflow[horovod]
 
 git clone git@github.com:jackyko1991/vnet-tensorflow.git
 cd vnet-tensorflow
@@ -69,7 +71,37 @@ pip install -r requirements.txt
 ```
 
 ### Docker Container
-For the obsoleted development of TF1 and messy CUDA configuration, we provide the docker image for quick environment setting.
+We also provide Dockerfile for quick setup purpose.
+```bash
+# pull docker file
+docker pull vnet-tensorflow:latest
+
+# training settings
+DATA_DIR=<data-dir>
+CONFIG_JSON=<config-file>
+PIPELINE=<pipeline-file>
+LOG_DIR=<log-dir>
+CKPT_DIR=<ckpt-dir>
+
+# run docker image
+docker run -u $(id -u):$(id -g) --rm -p 6006:6006/tcp -v $DATA_DIR:/app/data -v $CONFIG_JSON:/app/configs -v $PIPELINE:/app/configs -v $LOG_DIR:/app/log -v $CKPT_DIR:/app/ckpt -it --entrypoint /bin/bash vnet-tensorflow:latest
+
+# run training command
+python main.py -p train --config_json /app/configs/config_docker.json
+```
+
+Change `<data-dir>`, `<config-file>`, `<pipeline-file>`, `<log-dir>` and  `<ckpt-dir>` accordingly. Sample configuration file can be found in [.configs/config_docker.json](./configs/config_docker.json) 
+
+Container port 6006 is exposed for Tensorboard. If you wish to start Tensorboard service during training you may reuse the same image with a new running container:
+```bash
+LOG_DIR=<log-dir>
+
+# run docker image
+docker run -u $(id -u):$(id -g) --rm -p 6006:6006/tcp -v $LOG_DIR:/app/log-it --entrypoint /bin/bash vnet-tensorflow:latest
+
+# run tensorboard
+tensorboard --logdir /app/log
+```
 
 ### Folder Hierarchy
 All training, testing and evaluation data should put in `./data`
