@@ -75,7 +75,7 @@ pip install -r requirements.txt
 We also provide Dockerfile for quick setup purpose.
 ```bash
 # pull docker file
-docker pull vnet-tensorflow:latest
+docker pull jackyko1991/vnet-tensorflow:latest
 
 # training settings
 DATA_DIR=<data-dir>
