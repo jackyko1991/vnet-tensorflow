@@ -44,6 +44,7 @@ Here is an example graph of network this code implements. Channel depth may chan
 - [x] Weighted DICE loss
 - [x] C++ inference (Deprecated)
 - [x] Preprocessing pipeline from external file
+- [x] Docker image run
 - [ ] Postprocessing pipeline after evaluation
 - [ ] Hyperparameter tuning
 
