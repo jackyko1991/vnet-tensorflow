@@ -70,7 +70,8 @@ class NiftiDataset(object):
 		images = []
 		for channel in range(len(image_paths)):
 			try:
-				image = self.read_image(image_paths[channel])
+				# image = self.read_image(image_paths[channel])
+				image = sitk.ReadImage(image_paths[channel])
 			except:
 				raise Exception("Error loading image: {}".format(image_paths[channel]))
 			images.append(image)
@@ -97,7 +98,8 @@ class NiftiDataset(object):
 
 		if self.train:
 			try:
-				label_ = self.read_image(os.path.join(self.data_dir,case, self.label_filename))
+				# label_ = self.read_image(os.path.join(self.data_dir,case, self.label_filename))
+				label_ = sitk.ReadImage(os.path.join(self.data_dir,case, self.label_filename))
 			except:
 				raise Exception("Error loading label: {}".format(os.path.join(self.data_dir,case, self.label_filename)))
 

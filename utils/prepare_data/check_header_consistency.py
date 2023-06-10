@@ -3,14 +3,15 @@ import SimpleITK as sitk
 from tqdm import tqdm
 
 def main():
-	data_dir = "/users/kir-fritzsche/oyk357/archive/cow_data/split/fold_0/training"
+	data_dir = "/users/kir-fritzsche/oyk357/archive/cow_data/split/fold_0/testing"
 
 	pbar = tqdm(os.listdir(data_dir))
+	# pbar = tqdm(["topcow_mr_007","topcow_mr_013","topcow_mr_016","topcow_mr_017"])
 	for case in pbar:
 		pbar.set_description(case)
 		reader = sitk.ImageFileReader()
 		image_path = os.path.join(data_dir,case,"image.nii.gz")
-		label_path = os.path.join(data_dir,case,"label_multi.nii.gz")
+		label_path = os.path.join(data_dir,case,"label.nii.gz")
 
 		if not (os.path.exists(image_path) and os.path.exists(label_path)):
 			continue
@@ -32,6 +33,10 @@ def main():
 			print(case, "origin")
 			print(image.GetOrigin())
 			print(label.GetOrigin())
+		if not (image.GetSpacing() == label.GetSpacing()):
+			print(case, "spacing")
+			print(image.GetSpacing())
+			print(label.GetSpacing())
 
 if __name__=="__main__":
 	main()
