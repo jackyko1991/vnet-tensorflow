@@ -69,7 +69,10 @@ class NiftiDataset(object):
 		# read image and label
 		images = []
 		for channel in range(len(image_paths)):
-			image = self.read_image(image_paths[channel])
+			try:
+				image = self.read_image(image_paths[channel])
+			except:
+				raise Exception("Error loading image: {}".format(image_paths[channel]))
 			images.append(image)
 
 		for channel in range(len(images)):
