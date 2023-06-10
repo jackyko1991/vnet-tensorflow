@@ -1,25 +1,37 @@
 import os
 import SimpleITK as sitk
+from tqdm import tqdm
 
 def main():
-	data_dir = "/mnt/data_disk/ADAM_release_subjs/training"
+	data_dir = "/users/kir-fritzsche/oyk357/archive/cow_data/split/fold_0/training"
 
-	for case in os.listdir(data_dir):
+	pbar = tqdm(os.listdir(data_dir))
+	for case in pbar:
+		pbar.set_description(case)
 		reader = sitk.ImageFileReader()
-		reader.SetFileName(os.path.join(data_dir,case,"TOF.nii.gz"))
+		image_path = os.path.join(data_dir,case,"image.nii.gz")
+		label_path = os.path.join(data_dir,case,"label_multi.nii.gz")
+
+		if not (os.path.exists(image_path) and os.path.exists(label_path)):
+			continue
+
+		reader.SetFileName(image_path)
 		image = reader.Execute()
-		reader.SetFileName(os.path.join(data_dir,case,"struct_aligned.nii.gz"))
+		reader.SetFileName(label_path)
 		label = reader.Execute()
 
 		if not (image.GetSize() == label.GetSize()):
 			print(case, "size")
+			print(image.GetSize())
+			print(label.GetSize())
 		if not (image.GetDirection() == label.GetDirection()):
 			print(case, "direction")
 			print(image.GetDirection())
 			print(label.GetDirection())
 		if not (image.GetOrigin() == label.GetOrigin()):
 			print(case, "origin")
-
+			print(image.GetOrigin())
+			print(label.GetOrigin())
 
 if __name__=="__main__":
 	main()

@@ -3,18 +3,25 @@ import SimpleITK as sitk
 from tqdm import tqdm
 
 def main():
-	data_dir = "/mnt/data_disk/ADAM_release_subjs/testing"
+	data_dir = "/users/kir-fritzsche/oyk357/archive/cow_data/split/fold_0/training"
 
-	pbar = tqdm(os.listdir(data_dir))
-	image_1_filename = "TOF.nii.gz"
-	image_2_filename = "struct_aligned.nii.gz"
+	# pbar = tqdm(os.listdir(data_dir))
+	pbar = tqdm(["topcow_mr_030"])
+	image_1_filename = "image.nii.gz"
+	image_2_filename = "label.nii.gz"
 
 	for case in pbar:
 		pbar.set_description(case)
+		image1_path = os.path.join(data_dir,case,image_1_filename)
+		image2_path = os.path.join(data_dir,case,image_2_filename)
+
+		if not (os.path.exists(image1_path) and os.path.exists(image2_path)):
+			continue
+
 		reader = sitk.ImageFileReader()
-		reader.SetFileName(os.path.join(data_dir,case,image_1_filename))
+		reader.SetFileName(image1_path)
 		image1 = reader.Execute()
-		reader.SetFileName(os.path.join(data_dir,case,image_2_filename))
+		reader.SetFileName(image2_path)
 		image2 = reader.Execute()
 
 		if (image1.GetDirection() == image2.GetDirection()):
