@@ -332,7 +332,7 @@ class image2label(object):
 		with tf.device('/cpu:0'):
 			# load the pipeline from yaml
 			with open(self.training_pipeline) as f:
-				pipeline_ = yaml.load(f)
+				pipeline_ = yaml.load(f, Loader=yaml.Loader)
 
 			if self.dimension == 2:
 				train_transforms_3d = []
