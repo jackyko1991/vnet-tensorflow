@@ -66,6 +66,7 @@ mamba create -n vnet-tensorflow python=3.8 -y
 mamba activate vnet-tensorflow
 pip install --user nvidia-pyindex
 pip install --user nvidia-tensorflow[horovod]
+pip install --user nvidia-tensorboard
 
 git clone git@github.com:jackyko1991/vnet-tensorflow.git
 cd vnet-tensorflow
