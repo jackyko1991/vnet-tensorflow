@@ -96,7 +96,10 @@ class NiftiDataset(object):
 		label.SetDirection(images[0].GetDirection())
 
 		if self.train:
-			label_ = self.read_image(os.path.join(self.data_dir,case, self.label_filename))
+			try:
+				label_ = self.read_image(os.path.join(self.data_dir,case, self.label_filename))
+			except:
+				raise Exception("Error loading label: {}".format(os.path.join(self.data_dir,case, self.label_filename)))
 
 			# check header same
 			sameSize = label_.GetSize() == images[0].GetSize()
