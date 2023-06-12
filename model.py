@@ -623,6 +623,7 @@ class image2label(object):
 		print("{}: Build graph complete".format(datetime.datetime.now()))
 
 	def train(self):
+		print("{}: VNet Tensorflow training start...".format(datetime.datetime.now()))
 		# read config to class variables
 		self.read_config()
 
