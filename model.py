@@ -11,6 +11,7 @@ import SimpleITK as sitk
 import multiprocessing
 from tqdm import tqdm
 import yaml
+import shutil
 
 def grayscale_to_rainbow(image):
 	# grayscale to rainbow colormap, convert to HSV (H = reversed grayscale from 0:2/3, S and V are all 1)
@@ -175,8 +176,10 @@ class image2label(object):
 		self.sess = sess
 		self.config = config
 		self.model = None
+		print("build tf graph")
 		self.graph = tf.Graph()
 		self.graph.as_default()
+		print("finish building tf graph")
 		self.epoches = 999999999999999999
 
 	def read_config(self):
@@ -208,6 +211,10 @@ class image2label(object):
 
 		self.network_name = self.config['TrainingSetting']['Networks']['Name']
 		self.dropout_rate = self.config['TrainingSetting']['Networks']['Dropout']
+		self.num_channel = self.config['TrainingSetting']['Networks']['NumChannel']
+		self.num_levels = self.config['TrainingSetting']['Networks']['NumLevels']
+		self.num_convolutions = self.config['TrainingSetting']['Networks']['NumConvolutions']
+		self.bottom_convolutions = self.config['TrainingSetting']['Networks']['BottomConvolutions']
 
 		self.optimizer_name = self.config['TrainingSetting']['Optimizer']['Name']
 		self.initial_learning_rate = self.config['TrainingSetting']['Optimizer']['InitialLearningRate']
@@ -411,10 +418,10 @@ class image2label(object):
 			self.network = networks.UNet(
 				num_output_channels=self.output_channel_num,
 				dropout_rate=self.dropout_placeholder,
-				num_channels=4,
-				num_levels=4,
-				num_convolutions=2,
-				bottom_convolutions=2,
+				num_channels=self.num_channel,
+				num_levels=self.num_levels,
+				num_convolutions=self.num_convolutions,
+				bottom_convolutions=self.bottom_convolutions,
 				is_training=True,
 				activation_fn="relu"
 				)
@@ -422,10 +429,10 @@ class image2label(object):
 			self.network = networks.VNet(
 				num_classes=self.output_channel_num,
 				dropout_rate=self.dropout_placeholder,
-				num_channels=16,
-				num_levels=4,
-				num_convolutions=(1, 2, 3, 3),
-				bottom_convolutions=3,
+				num_channels=self.num_channel,
+				num_levels=self.num_levels,
+				num_convolutions=self.num_convolutions,
+				bottom_convolutions=self.bottom_convolutions,
 				is_training = True,
 				activation_fn="prelu"
 				)

@@ -25,7 +25,11 @@
         "LogInterval": 50,
         "Networks": {
             "Name":"VNet",
-            "Dropout": 0.01
+            "Dropout": 0.01,
+            "NumChannel": 16,
+            "NumLevels": 4,
+            "NumCovolutions": [1, 2, 3, 3],
+            "BottomConvolutions": 3
         },
         "Loss": {
             "Name": "weighted_sorensen",
