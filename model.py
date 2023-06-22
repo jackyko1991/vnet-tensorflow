@@ -1141,7 +1141,7 @@ class image2label(object):
 
 		# load the pipeline from yaml
 		with open(self.evaluate_pipeline) as f:
-			pipeline_ = yaml.load(f)
+			pipeline_ = yaml.load(f, Loader=yaml.Loader)
 
 		if self.dimension == 2:
 			transforms3D = []
