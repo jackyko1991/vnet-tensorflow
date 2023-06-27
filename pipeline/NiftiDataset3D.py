@@ -236,8 +236,18 @@ class StatisticalNormalization(object):
 			intensityWindowingFilter = sitk.IntensityWindowingImageFilter()
 			intensityWindowingFilter.SetOutputMaximum(255)
 			intensityWindowingFilter.SetOutputMinimum(0)
-			intensityWindowingFilter.SetWindowMaximum(statisticsFilter.GetMean()+self.sigma*statisticsFilter.GetSigma())
-			intensityWindowingFilter.SetWindowMinimum(statisticsFilter.GetMean()-self.sigma*statisticsFilter.GetSigma())
+			windowMax = statisticsFilter.GetMean()+self.sigma*statisticsFilter.GetSigma()
+			windowMin = statisticsFilter.GetMean()-self.sigma*statisticsFilter.GetSigma()
+
+			try:
+				windowMax = windowMax if windowMax < np.iinfo(sitk.GetArrayFromImage(image[image_channel]).dtype).max else np.iinfo(sitk.GetArrayFromImage(image[image_channel]).dtype).max
+				windowMin = windowMin if windowMin > np.iinfo(sitk.GetArrayFromImage(image[image_channel]).dtype).min else np.iinfo(sitk.GetArrayFromImage(image[image_channel]).dtype).min
+			except:
+				windowMax = windowMax if windowMax < np.finfo(sitk.GetArrayFromImage(image[image_channel]).dtype).max else np.finfo(sitk.GetArrayFromImage(image[image_channel]).dtype).max
+				windowMin = windowMin if windowMin > np.finfo(sitk.GetArrayFromImage(image[image_channel]).dtype).min else np.finfo(sitk.GetArrayFromImage(image[image_channel]).dtype).min
+
+			intensityWindowingFilter.SetWindowMaximum(windowMax)
+			intensityWindowingFilter.SetWindowMinimum(windowMin)
 
 			image[image_channel] = intensityWindowingFilter.Execute(image[image_channel])
 
@@ -448,11 +458,13 @@ class Padding(object):
 class RandomCrop(object):
 	"""
 	Crop randomly the image in a sample. This is usually used for data augmentation.
-	Drop ratio is implemented for randomly dropout crops with empty label. (Default to be 0.2)
+	Drop ratio is implemented for randomly dropout crops with minimal size label. (Default to be 0.1)
 	This transformation only applicable in train mode
 
 	Args:
 		output_size (tuple or int): Desired output size. If int, cubic crop is made.
+		drop_ratio (float): Probability of randomly dropout patch crops with minimal size label. (default=
+		min_pixel (int): Minimum size of pixel not falling into dropout decision. (default=1)
 	"""
 
 	def __init__(self, output_size, drop_ratio=0.1, min_pixel=1):
