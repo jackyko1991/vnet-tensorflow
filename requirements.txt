@@ -1,4 +1,4 @@
 SimpleITK
 tqdm
-protobuf==3.19.6
+protobuf==4.25.8
 PyYAML
